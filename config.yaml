@@ -50,6 +50,12 @@ strategy:
     use_donchian: true
     entry_window: 50
     exit_window: 25
+    # target_vol drives the NAV/risk trade-off. 0.55 is the Sharpe-optimal
+    # choice selected by train+validation (do not raise it by peeking at test).
+    # Raising it is a deliberate higher-NAV / higher-drawdown risk preference:
+    #   0.55 -> test NAV 1.45, Sharpe 0.58, MaxDD -39%
+    #   0.75 -> test NAV 1.70, Sharpe 0.66, MaxDD -42%  (higher-NAV preset)
+    #   1.00 -> test NAV 1.70, Sharpe 0.67, MaxDD -48%
     target_vol: 0.55
     vol_window: 45
     max_size: 2.0

@@ -17,6 +17,7 @@ from . import (
     donchian_breakout,
     leveraged_buy_and_hold,
     momentum_long_short,
+    mvrv_trend,
     sma_long_flat,
     sma_long_short,
     trend_ensemble,
@@ -37,6 +38,7 @@ STRATEGY_REGISTRY: dict[str, SignalFn] = {
     "vol_target_trend": vol_target_trend.generate_signals,
     "donchian_breakout": donchian_breakout.generate_signals,
     "trend_ensemble": trend_ensemble.generate_signals,
+    "mvrv_trend": mvrv_trend.generate_signals,
 }
 
 
