@@ -49,6 +49,15 @@ basis buy-and-hold has the best risk-adjusted return.
   robust than the trend ensemble (0.57), but still below buy-and-hold (0.77). It
   is too cautious in the test bull (test NAV 1.10 vs 1.50). Competitive, not
   better.
+  - **Reward design matters**: a log-utility (growth-optimal) reward genuinely
+    beats the raw-PnL reward (mean-yearly 0.69 -> ~0.8, less cautious, higher
+    NAV), consistently across action sets. This is a real RL improvement.
+  - **But the apparent BH-beating result was seed luck.** logutil with fine
+    actions looked like it beat BH (sweep: test Sh 0.70 / NAV 1.79). Verification
+    killed it: on the SELECTABLE years (2019-2023) it only TIES BH (mean-yearly
+    1.12 vs 1.12), and a FRESH seed batch (5-9) gave test 0.48 / NAV 1.31 —
+    *below* BH. The win did not reproduce. Lesson: re-run on fresh seeds and
+    check train+val folds before believing any "win".
 
 ## Overall verdict after ~1,300 ML configs + RL
 

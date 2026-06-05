@@ -79,9 +79,13 @@ class ReinforceTrader:
         entropy_coef: float = 0.01,
         epochs: int = 300,
         seed: int = 0,
+        reward_type: str = "pnl",
+        vol_coef: float = 5.0,
     ):
         self.actions = np.asarray(actions, dtype=np.float64)
         self.fee_rate = fee_rate
+        self.reward_type = reward_type
+        self.vol_coef = vol_coef
         self.hidden = hidden
         self.dropout = dropout
         self.lr = lr
@@ -129,7 +133,17 @@ class ReinforceTrader:
             w = action_vals[a]  # chosen target weight per day
             # Turnover from consecutive actions (prev starts flat at 0).
             prev_w = torch.cat([torch.zeros(1, device=self.device), w[:-1]])
-            rewards = w * rt - self.fee_rate * torch.abs(w - prev_w)
+            pnl = w * rt
+            turn_cost = self.fee_rate * torch.abs(w - prev_w)
+            if self.reward_type == "logutil":
+                # Growth-optimal (Kelly-like): rewards compounding, so the agent
+                # is less likely to sit out uptrends. Clamp to avoid log(<=0).
+                rewards = torch.log(torch.clamp(1.0 + pnl, min=1e-3)) - turn_cost
+            elif self.reward_type == "vol_pen":
+                # Risk-adjusted: penalize squared daily PnL (variance proxy).
+                rewards = pnl - turn_cost - self.vol_coef * pnl * pnl
+            else:  # "pnl"
+                rewards = pnl - turn_cost
 
             # Discounted reward-to-go via reverse cumulative sum, standardized.
             disc = rewards * gpow
