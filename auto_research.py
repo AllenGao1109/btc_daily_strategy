@@ -41,17 +41,23 @@ from src.ml.walkforward import predictions_to_weight, walk_forward_predict
 
 RESULTS = Path("results/ml_results.csv")
 
+# Round 2: standalone next-day ML did not generalize (mean test Sharpe -0.28,
+# val/test decoupled at the top). Refocus on (a) longer horizons + trend/vol-mom
+# features that showed the least-bad behavior, (b) heavier regularization, and
+# (c) the HYBRID "gate" mode where ML only filters the robust trend ensemble
+# rather than trading standalone.
 SEARCH_SPACE = {
-    "horizon": [1, 3, 5, 10, 20],
-    "feature_set": ["base", "base_onchain", "trend", "vol_mom"],
-    "model": ["logistic", "mlp_small", "mlp_mid"],
+    "horizon": [5, 10, 20, 30],
+    "feature_set": ["vol_mom", "trend", "base_onchain"],
+    "model": ["logistic", "mlp_small"],
     "task": ["classification", "regression"],
-    "dropout": [0.2, 0.3, 0.5],
-    "weight_decay": [1e-3, 3e-3, 1e-2],
+    "dropout": [0.3, 0.5],
+    "weight_decay": [3e-3, 1e-2, 3e-2],
     "epochs": [60, 100],
-    "n_seeds": [1, 3],
-    "signal_mode": ["vol_target", "sign"],
-    "long_only": [True, False],
+    "n_seeds": [3, 5],
+    "signal_mode": ["gate", "vol_target", "sign"],
+    "long_only": [True],
+    "gate_down": [0.0, 0.3, 0.5],
 }
 
 FEATURE_SETS = {
@@ -122,10 +128,12 @@ def main():
     df = add_onchain_features(merge_onchain(df, load_coinmetrics(["CapMVRVCur", "AdrActCnt"])))
     splits = make_fixed_split(cfg["validation"])
 
-    # Reference: the chosen non-ML ensemble's validation Sharpe.
-    ens = run_full(df, get_strategy("trend_ensemble")(
+    # Reference: the chosen non-ML ensemble's validation Sharpe, and its raw
+    # weight (used as the base for hybrid "gate" experiments).
+    ens_weight = get_strategy("trend_ensemble")(
         df, {"sma_windows": [50, 100, 200], "use_donchian": True,
-             "target_vol": 0.55, "vol_window": 45}), bt)
+             "target_vol": 0.55, "vol_window": 45})
+    ens = run_full(df, ens_weight, bt)
     ens_val = window_metrics(ens, splits["validation"])
     print(f"device={get_device()}  reference ENS val Sharpe={ens_val['sharpe_ratio']:.2f}")
 
@@ -155,7 +163,8 @@ def main():
                 X, y, model_factory(c), initial_train=730, step=120)
             raw = predictions_to_weight(
                 preds, df, mode=c["signal_mode"], target_vol=0.55,
-                long_only=c["long_only"])
+                long_only=c["long_only"], base_weight=ens_weight,
+                gate_down=c.get("gate_down", 0.3))
             res = run_full(df, raw, bt)
             tr = window_metrics(res, splits["train"])
             va = window_metrics(res, splits["validation"])

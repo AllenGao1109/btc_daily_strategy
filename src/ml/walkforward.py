@@ -76,6 +76,8 @@ def predictions_to_weight(
     max_weight: float = 2.0,
     long_only: bool = False,
     scale: float = 50.0,
+    base_weight: pd.Series | None = None,
+    gate_down: float = 0.3,
 ) -> pd.Series:
     """Convert OOS predictions into a raw target-weight signal in [-2, 2].
 
@@ -83,12 +85,18 @@ def predictions_to_weight(
         preds: Per-day model predictions (sign = directional call).
         df: Price frame (for realized-vol sizing).
         mode: ``"sign"`` (fixed +/-1 by direction), ``"linear"`` (clip scaled
-            prediction), or ``"vol_target"`` (direction sized to a vol target).
+            prediction), ``"vol_target"`` (direction sized to a vol target), or
+            ``"gate"`` (use ``base_weight`` as the position but scale it down by
+            ``gate_down`` on days the model's call is bearish — i.e. ML acts as a
+            filter/veto on a robust base strategy rather than trading standalone).
         target_vol: Annualized vol target for ``vol_target`` mode.
         vol_window: Realized-vol lookback.
         max_weight: Absolute weight cap (<= 2.0).
         long_only: If True, negative calls go flat instead of short.
         scale: Multiplier for ``linear`` mode.
+        base_weight: Base strategy weights, required for ``gate`` mode.
+        gate_down: Multiplier applied to ``base_weight`` when the model is
+            bearish (pred <= 0), in [0, 1]. 1.0 = no gating.
 
     Returns:
         Raw target weights aligned to ``df.index`` (NaN where preds is NaN).
@@ -108,6 +116,11 @@ def predictions_to_weight(
         realized_vol = ret.rolling(vol_window).std() * np.sqrt(365)
         size = (target_vol / realized_vol.replace(0.0, np.nan)).clip(upper=max_weight)
         weight = direction * size
+    elif mode == "gate":
+        if base_weight is None:
+            raise ValueError("gate mode requires base_weight.")
+        gate = pd.Series(1.0, index=preds.index).where(preds > 0, gate_down)
+        weight = base_weight.reindex(preds.index) * gate
     else:
         raise ValueError(f"Unknown mode: {mode!r}")
 
