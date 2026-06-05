@@ -1,0 +1,9 @@
+device=mps  reference ENS val Sharpe=0.87
+[0] NEW BEST val Sharpe=0.29 (test peek 0.60) mlp_small/regression/h30/trend
+[1] NEW BEST val Sharpe=0.87 (test peek 0.66) mlp_small/classification/h10/base_onchain
+[15] NEW BEST val Sharpe=0.88 (test peek 0.66) logistic/regression/h30/base_onchain
+[17] NEW BEST val Sharpe=0.97 (test peek 0.60) mlp_small/regression/h30/trend
+[112] NEW BEST val Sharpe=1.04 (test peek 0.44) mlp_small/classification/h30/trend
+[232] NEW BEST val Sharpe=1.14 (test peek 0.60) logistic/classification/h20/base_onchain
+[392] NEW BEST val Sharpe=1.14 (test peek 0.75) mlp_small/classification/h10/trend
+DONE 400 experiments. Best val Sharpe=1.1415179428866136 (ENS ref 0.87).

@@ -32,6 +32,7 @@ from src.config import BacktestConfig, load_config
 from src.data import load_btc_data
 from src.features import build_features
 from src.onchain import load_coinmetrics, merge_onchain
+from src.metrics import sharpe_ratio
 from src.research import run_full, window_metrics
 from src.strategies import get_strategy
 from src.validation import make_fixed_split
@@ -116,6 +117,23 @@ def sample_config(rng: np.random.Generator) -> dict:
     return {k: v[int(rng.integers(len(v)))] for k, v in SEARCH_SPACE.items()}
 
 
+def fold_yearly_sharpe(res, lo_year: int, hi_year: int) -> tuple[float, float]:
+    """Mean and MIN per-calendar-year Sharpe over [lo_year, hi_year] (inclusive).
+
+    This is the robustness metric: aggregate validation Sharpe hides window
+    luck, so we select on consistency across yearly folds instead. Computed only
+    over train+validation years (never the test window).
+    """
+    sharpes = []
+    for yr in range(lo_year, hi_year + 1):
+        sub = res[res.index.year == yr]["strategy_daily_return"]
+        if len(sub) > 30:
+            sharpes.append(sharpe_ratio(sub, 365))
+    if not sharpes:
+        return -1e9, -1e9
+    return float(np.mean(sharpes)), float(np.min(sharpes))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--max-exp", type=int, default=300)
@@ -144,8 +162,8 @@ def main():
     writer = csv.writer(fh)
     if new_file:
         writer.writerow(["exp", "config", "train_sharpe", "val_sharpe",
-                         "robust_sharpe", "val_nav", "val_maxdd", "val_trades",
-                         "test_sharpe_PEEK", "liquidated", "secs"])
+                         "fold_min_sharpe", "val_nav", "val_maxdd", "val_trades",
+                         "test_sharpe_PEEK", "liquidated", "secs", "fold_mean_sharpe"])
 
     rng = np.random.default_rng(args.seed)
     best = {"robust": -1e9}
@@ -169,27 +187,34 @@ def main():
             tr = window_metrics(res, splits["train"])
             va = window_metrics(res, splits["validation"])
             te = window_metrics(res, splits["test"])  # PEEK: logged, not selected on
-            robust = min(tr["sharpe_ratio"], va["sharpe_ratio"])
+            # Robustness = MIN per-year Sharpe over the train+val OOS years
+            # (2019-2023); selecting on this avoids aggregate-window luck.
+            fold_mean, fold_min = fold_yearly_sharpe(res, 2019, 2023)
             liq = bool(res["liquidated"].any())
             writer.writerow([exp, json.dumps(c), round(tr["sharpe_ratio"], 3),
-                             round(va["sharpe_ratio"], 3), round(robust, 3),
+                             round(va["sharpe_ratio"], 3), round(fold_min, 3),
                              round(va["final_nav"], 3), round(va["max_drawdown"], 3),
                              int(va["num_trades"]), round(te["sharpe_ratio"], 3),
-                             liq, round(time.time() - t0, 1)])
+                             liq, round(time.time() - t0, 1), round(fold_mean, 3)])
             fh.flush()
-            if (not liq) and va["sharpe_ratio"] > best.get("val", -1e9):
-                best = {"val": va["sharpe_ratio"], "robust": robust, "exp": exp, "config": c,
+            # Select on fold-min Sharpe (worst train+val year), the robustness bar.
+            if (not liq) and fold_min > best.get("fold_min", -1e9):
+                best = {"fold_min": fold_min, "fold_mean": fold_mean,
+                        "val": va["sharpe_ratio"], "exp": exp, "config": c,
                         "test_peek": te["sharpe_ratio"]}
-                print(f"[{exp}] NEW BEST val Sharpe={va['sharpe_ratio']:.2f} "
-                      f"(test peek {te['sharpe_ratio']:.2f}) {c['model']}/{c['task']}/"
-                      f"h{c['horizon']}/{c['feature_set']}")
+                print(f"[{exp}] NEW BEST fold-min={fold_min:.2f} mean={fold_mean:.2f} "
+                      f"val={va['sharpe_ratio']:.2f} (test peek {te['sharpe_ratio']:.2f}) "
+                      f"{c['model']}/h{c['horizon']}/{c['feature_set']}/{c['signal_mode']}")
         except Exception as e:  # noqa: BLE001 - keep the run alive
-            writer.writerow([exp, json.dumps(c), "ERR", str(e)[:80], "", "", "", "", "", "", round(time.time()-t0,1)])
+            writer.writerow([exp, json.dumps(c), "ERR", str(e)[:80], "", "", "", "", "", "", round(time.time()-t0,1), ""])
             fh.flush()
 
     fh.close()
-    print(f"DONE {args.max_exp} experiments. Best val Sharpe={best.get('val')} "
-          f"(ENS ref {ens_val['sharpe_ratio']:.2f}).")
+    # Reference: buy-and-hold's own fold-min over the same years, the bar to beat.
+    bh = run_full(df, get_strategy("buy_and_hold")(df, {}), bt)
+    bh_mean, bh_min = fold_yearly_sharpe(bh, 2019, 2023)
+    print(f"DONE {args.max_exp} experiments. Best fold-min={best.get('fold_min')} "
+          f"(buy-hold fold-min {bh_min:.2f}, mean {bh_mean:.2f}).")
 
 
 if __name__ == "__main__":
