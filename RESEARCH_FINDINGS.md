@@ -38,6 +38,29 @@ basis buy-and-hold has the best risk-adjusted return.
   multi-day grinds, not single-day crashes a daily stop catches.
 - **MVRV valuation gating** — 2024-2025 ran persistently high MVRV without a
   top, so de-risking exited a rising market.
+- **Fold-robust ML selection** (round 3, 400 experiments): selecting on MIN
+  per-year Sharpe over 2019-2023 found exactly ONE config beating buy-and-hold's
+  per-year bar (fold-mean 1.15 vs 1.12) — and it still failed on the held-out
+  test (0.46 vs 0.58). Robustness on the selectable years does not transfer to
+  the held-out years.
+- **Reinforcement learning** (REINFORCE policy gradient, MPS, fee in the reward):
+  trained only on 2017-2021, the agent learned a sensible low-turnover long-
+  biased policy on its own (mean-yearly Sharpe 0.69, 6/8 positive years) — MORE
+  robust than the trend ensemble (0.57), but still below buy-and-hold (0.77). It
+  is too cautious in the test bull (test NAV 1.10 vs 1.50). Competitive, not
+  better.
+
+## Overall verdict after ~1,300 ML configs + RL
+
+On daily BTC with these features, **nothing robustly beats buy-and-hold out-of-
+sample** once fees and per-year robustness are enforced. The 0.5% per-trade fee
+is a high hurdle and daily price moves are close to unpredictable. The deployable
+choice is a risk preference, not an alpha:
+  - buy-and-hold: best year-by-year Sharpe, but -83% drawdowns;
+  - vol-targeted trend ensemble (band 0.30): ~half the drawdown and higher full-
+    sample Sharpe at similar return, but gives up bull-market NAV.
+Further upside almost certainly requires a different data regime (intraday
+microstructure, order flow, sentiment) rather than more models on daily bars.
 
 ## Methodology notes
 

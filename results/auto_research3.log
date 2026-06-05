@@ -1,0 +1,10 @@
+device=mps  reference ENS val Sharpe=0.91
+[0] NEW BEST fold-min=-2.91 mean=0.13 val=0.10 (test peek 0.16) logistic/h20/base_onchain/vol_target
+[1] NEW BEST fold-min=-1.56 mean=0.96 val=0.39 (test peek 0.56) logistic/h20/vol_mom/vol_target
+[2] NEW BEST fold-min=-1.51 mean=0.31 val=0.58 (test peek 0.07) mlp_small/h10/trend/gate
+[3] NEW BEST fold-min=-1.29 mean=0.98 val=0.40 (test peek 0.61) mlp_small/h20/vol_mom/sign
+[7] NEW BEST fold-min=-1.04 mean=0.09 val=-0.48 (test peek -0.16) mlp_small/h30/trend/vol_target
+[16] NEW BEST fold-min=-0.62 mean=1.11 val=0.89 (test peek 0.42) mlp_small/h30/vol_mom/vol_target
+[55] NEW BEST fold-min=-0.45 mean=0.11 val=-0.11 (test peek -0.55) mlp_small/h5/trend/vol_target
+[187] NEW BEST fold-min=-0.04 mean=0.32 val=-0.01 (test peek 0.27) mlp_small/h5/trend/vol_target
+DONE 400 experiments. Best fold-min=-0.03864308663213035 (buy-hold fold-min -1.28, mean 1.12).
