@@ -11,6 +11,27 @@ The vol-targeted trend ensemble offers genuinely lower drawdown (and higher
 full-sample Sharpe), but it gives up NAV in bull markets, and on a year-by-year
 basis buy-and-hold has the best risk-adjusted return.
 
+## Most promising lead: factor mining (deterministic)
+
+Pivoting from "more models on the same features" to MINING NEW FACTORS found the
+strongest signal yet. Factors ranked by IC stability across train AND validation
+(same sign, both above noise) surfaced economically-grounded winners:
+  - **BTC halving-cycle phase** (halving_cos): robust on all 3 horizons, IC
+    ~0.2-0.33 at 20-day. The single best factor — a genuinely BTC-specific edge.
+  - return kurtosis, volatility regime, MVRV valuation z-score, 120-day momentum,
+    exchange net-flow (sell pressure).
+
+The IC-weighted composite (`factor_composite` strategy), mapped to a long-biased
+vol-targeted weight, is DETERMINISTIC (no seed luck) and low-turnover (~89 trades):
+  - **Test (2024-2026): Sharpe 1.01 / NAV 2.02 vs buy-and-hold 0.58 / 1.50** —
+    beats BH on both, with a better worst year.
+  - **All-8-year mean Sharpe 0.85 vs BH 0.77** — beats BH.
+  - **BUT train+val-only years: 0.99 vs BH 1.12** — still just under. It gives up
+    the explosive 2019/2023 bull-year Sharpe (vol-targeting caps it) while winning
+    the choppy test years. Regime-dependent, not yet a clean disciplined win.
+This is the live thread: mine more factors / refine the mapping to clear the
+train+val bar without test-peeking.
+
 ## What works
 
 - **Volatility targeting + diversified trend ensemble** — lower drawdown

@@ -23,7 +23,7 @@ from src.config import load_config
 from src.data import load_btc_data
 from src.factors import build_factors, forward_return, information_coefficient
 from src.features import build_features
-from src.onchain import load_coinmetrics, merge_onchain
+from src.onchain import ONCHAIN_METRICS, load_coinmetrics, merge_onchain
 from src.validation import make_fixed_split
 
 HORIZONS = [1, 5, 20]
@@ -33,7 +33,7 @@ ROBUST_IC = 0.03  # |IC| threshold on a single window (daily data is noisy)
 def main():
     cfg = load_config("config.yaml")
     df = build_features(load_btc_data(cfg))
-    df = merge_onchain(df, load_coinmetrics(["CapMVRVCur", "AdrActCnt"]))
+    df = merge_onchain(df, load_coinmetrics(ONCHAIN_METRICS))
     factors = build_factors(df)
     splits = make_fixed_split(cfg["validation"])
     tr_idx = splits["train"].slice(df).index

@@ -128,11 +128,22 @@ def build_factors(df: pd.DataFrame) -> pd.DataFrame:
         adr = df["AdrActCnt"].astype(float)
         out["adr_growth_30"] = adr.pct_change(30)
         out["adr_z_90"] = (adr - adr.rolling(90).mean()) / adr.rolling(90).std()
-    # NVT-style: market cap / transaction-volume proxy, if available.
-    if "CapMrktCurUSD" in df.columns and "TxTfrValAdjUSD" in df.columns:
-        out["nvt"] = df["CapMrktCurUSD"].astype(float) / df["TxTfrValAdjUSD"].astype(
-            float
-        ).rolling(30).mean()
+    # Exchange flows: coins moving TO exchanges = sell pressure (bearish);
+    # OUT = accumulation (bullish). Net flow is a classic positioning signal.
+    if "FlowInExUSD" in df.columns and "FlowOutExUSD" in df.columns:
+        net = df["FlowInExUSD"].astype(float) - df["FlowOutExUSD"].astype(float)
+        out["ex_netflow_z90"] = (net - net.rolling(90).mean()) / net.rolling(90).std()
+        out["ex_netflow_mom30"] = net.rolling(30).mean() - net.rolling(90).mean()
+        if "CapMrktCurUSD" in df.columns:
+            out["ex_netflow_to_mcap"] = net.rolling(7).mean() / df["CapMrktCurUSD"].astype(float)
+    if "AdrBalCnt" in df.columns:
+        bal = df["AdrBalCnt"].astype(float)
+        out["holders_growth_30"] = bal.pct_change(30)
+        out["holders_z_90"] = (bal - bal.rolling(90).mean()) / bal.rolling(90).std()
+    if "TxCnt" in df.columns:
+        tx = df["TxCnt"].astype(float)
+        out["tx_growth_30"] = tx.pct_change(30)
+        out["tx_z_90"] = (tx - tx.rolling(90).mean()) / tx.rolling(90).std()
 
     return out
 

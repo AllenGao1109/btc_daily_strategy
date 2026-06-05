@@ -26,6 +26,17 @@ RAW_DIR = Path(__file__).resolve().parent.parent / "data" / "raw"
 
 CM_BASE = "https://community-api.coinmetrics.io/v4/timeseries/asset-metrics"
 
+# CoinMetrics community-tier metrics available for BTC and useful as factors.
+ONCHAIN_METRICS = [
+    "CapMVRVCur",    # MVRV valuation ratio
+    "AdrActCnt",     # active addresses
+    "AdrBalCnt",     # addresses holding a balance (holder base)
+    "CapMrktCurUSD",  # market cap
+    "FlowInExUSD",   # exchange inflows (sell pressure)
+    "FlowOutExUSD",  # exchange outflows (accumulation)
+    "TxCnt",         # transaction count
+]
+
 
 def load_coinmetrics(
     metrics: list[str],

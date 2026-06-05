@@ -20,7 +20,7 @@ from src.data import load_btc_data
 from src.factors import composite_signal
 from src.features import build_features
 from src.metrics import sharpe_ratio
-from src.onchain import load_coinmetrics, merge_onchain
+from src.onchain import ONCHAIN_METRICS, load_coinmetrics, merge_onchain
 from src.research import run_full, window_metrics
 from src.strategies import get_strategy
 from src.validation import make_fixed_split
@@ -49,7 +49,7 @@ def main():
     cfg = load_config("config.yaml")
     bt = BacktestConfig.from_config(cfg)
     df = build_features(load_btc_data(cfg))
-    df = merge_onchain(df, load_coinmetrics(["CapMVRVCur", "AdrActCnt"]))
+    df = merge_onchain(df, load_coinmetrics(ONCHAIN_METRICS))
     splits = make_fixed_split(cfg["validation"])
     train_end = pd.Timestamp(cfg["validation"]["train_end"], tz="UTC")
 
