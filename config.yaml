@@ -1,0 +1,57 @@
+data:
+  source: "ccxt"
+  exchange: "coinbase"
+  symbol: "BTC/USD"
+  timeframe: "1d"
+  start_date: "2017-01-01"
+  end_date: null
+  timezone: "UTC"
+
+portfolio:
+  initial_capital: 10000
+  fee_rate: 0.005
+  slippage_rate: 0.0
+  cash_return: 0.0
+
+exposure:
+  allow_long: true
+  allow_short: true
+  allow_leverage: true
+  min_weight: -2.0
+  max_weight: 2.0
+  max_leverage: 2.0
+
+backtest:
+  execution_lag_days: 1
+  rebalance_policy: "signal_change_or_risk_control"
+  leverage_breach_action: "delever_next_day"
+  stop_trading_if_equity_zero: true
+
+funding:
+  enabled: true
+  long_borrow_rate_daily: 0.0
+  short_borrow_rate_daily: 0.0
+  perp_funding_rate_daily: 0.0
+
+validation:
+  train_start: "2017-01-01"
+  train_end: "2021-12-31"
+  validation_start: "2022-01-01"
+  validation_end: "2023-12-31"
+  test_start: "2024-01-01"
+  test_end: null
+  walk_forward: true
+
+strategy:
+  name: "sma_long_short"
+  params:
+    sma_slow: 200
+    momentum_window: 30
+    long_weight: 1.0
+    short_weight: -1.0
+    strong_long_weight: 2.0
+    strong_short_weight: -2.0
+
+report:
+  output_dir: "reports"
+  include_charts: true

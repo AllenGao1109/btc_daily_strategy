@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "btc-daily-strategy"
+version = "0.1.0"
+description = "Reproducible, leakage-free BTC daily long/short leveraged strategy research harness"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "matplotlib>=3.7",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+data = ["ccxt>=4.0"]
+stats = ["scipy>=1.10"]
+dev = ["pytest>=7.4"]
+
+[tool.setuptools]
+packages = ["src", "src.strategies"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
