@@ -71,6 +71,7 @@ def run_single(
         rebalance_policy=bt_cfg.rebalance_policy,
         leverage_breach_action=bt_cfg.leverage_breach_action,
         funding_config=bt_cfg.funding_config,
+        weight_band=bt_cfg.weight_band,
     )
 
 

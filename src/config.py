@@ -98,6 +98,7 @@ class BacktestConfig:
     rebalance_policy: str
     leverage_breach_action: str
     stop_trading_if_equity_zero: bool
+    weight_band: float
     funding_config: dict[str, Any]
 
     @classmethod
@@ -124,5 +125,6 @@ class BacktestConfig:
             stop_trading_if_equity_zero=bool(
                 backtest.get("stop_trading_if_equity_zero", True)
             ),
+            weight_band=float(backtest.get("weight_band", 0.0)),
             funding_config=dict(funding) if funding else {},
         )

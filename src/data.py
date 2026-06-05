@@ -54,6 +54,7 @@ def load_btc_data(
     symbol = data_cfg.get("symbol", "BTC/USD")
     timeframe = data_cfg.get("timeframe", "1d")
     exchange = data_cfg.get("exchange", "coinbase")
+    source = data_cfg.get("source", "ccxt")
     start_date = data_cfg.get("start_date")
     end_date = data_cfg.get("end_date")
 
@@ -70,7 +71,10 @@ def load_btc_data(
         if raw_path.exists() and not force_reload:
             df = _read_cache(raw_path)
         else:
-            df = _download_ccxt(exchange, symbol, timeframe, start_date)
+            if source == "cryptocompare":
+                df = _download_cryptocompare(symbol, start_date)
+            else:
+                df = _download_ccxt(exchange, symbol, timeframe, start_date)
             df.to_csv(raw_path)
         df = clean_data(df)
         df.to_csv(processed_path)
@@ -96,6 +100,68 @@ def _slice_dates(
         df = df[df.index >= pd.Timestamp(start_date, tz="UTC")]
     if end_date is not None:
         df = df[df.index <= pd.Timestamp(end_date, tz="UTC")]
+    return df
+
+
+def _download_cryptocompare(
+    symbol: str, start_date: str | None, *, page_limit: int = 2000
+) -> pd.DataFrame:
+    """Download daily OHLCV from CryptoCompare's free histoday endpoint.
+
+    Uses only the Python standard library (urllib + json), paginating backwards
+    via ``toTs`` until ``start_date`` is reached. Returns USD-quoted OHLC with
+    BTC-denominated volume. No API key required.
+
+    Args:
+        symbol: Pair like ``"BTC/USD"``; split into fsym/tsym.
+        start_date: Earliest date to fetch (ISO string) or None for ~max history.
+        page_limit: Candles per request (CryptoCompare allows up to 2000).
+
+    Returns:
+        Raw OHLCV DataFrame indexed by UTC DatetimeIndex.
+    """
+    import json
+    import urllib.request
+
+    fsym, _, tsym = symbol.partition("/")
+    tsym = tsym or "USD"
+    start_ts = (
+        int(pd.Timestamp(start_date, tz="UTC").timestamp()) if start_date else 0
+    )
+
+    rows: list[dict] = []
+    to_ts: int | None = None
+    # Hard stop on pages to avoid an infinite loop if the API misbehaves.
+    for _ in range(20):
+        url = (
+            "https://min-api.cryptocompare.com/data/v2/histoday"
+            f"?fsym={fsym}&tsym={tsym}&limit={page_limit}"
+        )
+        if to_ts is not None:
+            url += f"&toTs={to_ts}"
+        with urllib.request.urlopen(url, timeout=30) as resp:  # noqa: S310
+            payload = json.loads(resp.read().decode("utf-8"))
+        if payload.get("Response") != "Success":
+            raise RuntimeError(
+                f"CryptoCompare error: {payload.get('Message', 'unknown')}"
+            )
+        batch = payload["Data"]["Data"]
+        if not batch:
+            break
+        rows = batch + rows
+        earliest = batch[0]["time"]
+        # CryptoCompare pads the start with zero-price rows; stop once we have
+        # reached the requested start or run out of real history.
+        if earliest <= start_ts or all(r["close"] == 0 for r in batch[:5]):
+            break
+        to_ts = earliest - 1
+
+    df = pd.DataFrame(rows)
+    df = df[df["close"] > 0]  # drop zero-price padding rows
+    df["date"] = pd.to_datetime(df["time"], unit="s", utc=True)
+    df = df.rename(columns={"volumefrom": "volume"})
+    df = df[["date", "open", "high", "low", "close", "volume"]].set_index("date")
+    df = df[~df.index.duplicated(keep="first")].sort_index()
     return df
 
 

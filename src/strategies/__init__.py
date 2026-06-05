@@ -14,11 +14,14 @@ import pandas as pd
 from . import (
     buy_and_hold,
     cash,
+    donchian_breakout,
     leveraged_buy_and_hold,
     momentum_long_short,
     sma_long_flat,
     sma_long_short,
+    trend_ensemble,
     trend_leverage,
+    vol_target_trend,
 )
 
 SignalFn = Callable[[pd.DataFrame, dict], pd.Series]
@@ -31,6 +34,9 @@ STRATEGY_REGISTRY: dict[str, SignalFn] = {
     "sma_long_short": sma_long_short.generate_signals,
     "momentum_long_short": momentum_long_short.generate_signals,
     "trend_leverage": trend_leverage.generate_signals,
+    "vol_target_trend": vol_target_trend.generate_signals,
+    "donchian_breakout": donchian_breakout.generate_signals,
+    "trend_ensemble": trend_ensemble.generate_signals,
 }
 
 

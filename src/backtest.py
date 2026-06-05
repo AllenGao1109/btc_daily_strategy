@@ -152,6 +152,7 @@ def run_backtest(
     rebalance_policy: str = "signal_change_or_risk_control",
     leverage_breach_action: str = "delever_next_day",
     funding_config: dict[str, Any] | None = None,
+    weight_band: float = 0.0,
 ) -> pd.DataFrame:
     """Run the long/short leveraged daily backtest.
 
@@ -169,6 +170,12 @@ def run_backtest(
             ``daily_target_rebalance``.
         leverage_breach_action: ``delever_next_day`` (default) or ``liquidate``.
         funding_config: ``funding`` config section, or None.
+        weight_band: No-trade band on the target weight. Under the
+            ``signal_change_or_risk_control`` policy, a signal change triggers a
+            rebalance only if the new target differs from the last *executed*
+            target by more than ``weight_band`` (risk-control delever still fires
+            regardless). 0.0 (default) reproduces "trade on any change". A band
+            like 0.1-0.25 suppresses daily churn from continuous sizing.
 
     Returns:
         A daily state DataFrame indexed by date with the columns in
@@ -191,6 +198,7 @@ def run_backtest(
     prev_equity = float(initial_capital)
     prev_exposure = 0.0
     prev_target_weight = 0.0
+    last_exec_weight = 0.0  # target weight at the last actual rebalance
     liquidated = False
 
     records: list[dict[str, Any]] = []
@@ -216,7 +224,9 @@ def run_backtest(
         )
         gross_lev_before = abs(actual_weight_before)
 
-        signal_changed = not np.isclose(target_w, prev_target_weight)
+        # A signal change triggers a trade only if the new target moves away
+        # from the last executed target by more than the no-trade band.
+        signal_changed = abs(target_w - last_exec_weight) > weight_band + _LEV_EPS
         risk_breach = gross_lev_before > max_leverage + _LEV_EPS
 
         force_liquidate_now = False
@@ -233,8 +243,10 @@ def run_backtest(
         # --- Determine post-rebalance exposure. ---
         if force_liquidate_now:
             target_exposure_notional = 0.0
+            last_exec_weight = 0.0
         elif rebalance:
             target_exposure_notional = target_w * equity_before_trade
+            last_exec_weight = target_w
         else:
             # Carry the (drifted) position forward; no trade.
             target_exposure_notional = prev_exposure

@@ -23,6 +23,21 @@ def test_weight_bounds_respected_after_clipping():
     assert res["target_weight"].between(-2.0, 2.0).all()
 
 
+def test_weight_band_suppresses_small_rebalances():
+    # Target nudges by 0.1 each day; a 0.15 band should ignore those moves and
+    # only trade once the cumulative drift past the last executed target exceeds
+    # the band.
+    df = make_df([100] * 6)
+    raw = make_signal([0.0, 0.5, 0.6, 0.7, 0.75, 0.8], df)
+    no_band = run_backtest(df, raw, 10000, fee_rate=0.005, execution_lag_days=0)
+    banded = run_backtest(
+        df, raw, 10000, fee_rate=0.005, execution_lag_days=0, weight_band=0.15
+    )
+    assert (banded["trade_notional"] > 0).sum() < (no_band["trade_notional"] > 0).sum()
+    # Banding never trades more and so never costs more in fees.
+    assert banded["fee"].sum() <= no_band["fee"].sum()
+
+
 def test_deterministic_results():
     df = generate_synthetic_btc(n_days=300, seed=11)
     raw = sma_long_short.generate_signals(df, {"sma_slow": 100})
