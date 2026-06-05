@@ -15,5 +15,8 @@ data/processed/*
 reports/*.md
 reports/figures/*.png
 
+# Auto-research result logs (regenerated)
+results/*.csv
+
 # OS
 .DS_Store
