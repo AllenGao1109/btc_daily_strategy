@@ -70,6 +70,7 @@ STATE_COLUMNS = [
     "leverage_breach",
     "liquidated",
     "rebalanced",
+    "intraday_exit",
     "strategy_daily_return",
 ]
 
@@ -153,6 +154,8 @@ def run_backtest(
     leverage_breach_action: str = "delever_next_day",
     funding_config: dict[str, Any] | None = None,
     weight_band: float = 0.0,
+    take_profit_pct: float | None = None,
+    stop_loss_pct: float | None = None,
 ) -> pd.DataFrame:
     """Run the long/short leveraged daily backtest.
 
@@ -176,6 +179,19 @@ def run_backtest(
             target by more than ``weight_band`` (risk-control delever still fires
             regardless). 0.0 (default) reproduces "trade on any change". A band
             like 0.1-0.25 suppresses daily churn from continuous sizing.
+        take_profit_pct: Optional intraday take-profit, as a fraction of the
+            position's entry price (e.g. 0.10 = +10%). If the daily High (long)
+            or Low (short) touches the target, the position is closed *intraday*
+            at the target price. None disables it.
+        stop_loss_pct: Optional intraday stop-loss, as a fraction of entry price.
+            If both stop and target are touched on the same day, the STOP is
+            assumed to fill first (conservative). None disables it.
+
+    Note:
+        Intraday TP/SL use the daily High/Low to detect whether a level set
+        *before* the day was touched (no lookahead), but assume a fill exactly
+        at the level — an optimistic approximation that ignores gaps and
+        slippage through the level. Disabled by default.
 
     Returns:
         A daily state DataFrame indexed by date with the columns in
@@ -193,12 +209,17 @@ def run_backtest(
 
     close = df["close"].astype(float)
     btc_return = close.pct_change().fillna(0.0)
+    use_intraday = take_profit_pct is not None or stop_loss_pct is not None
+    high = df["high"].astype(float) if use_intraday else None
+    low = df["low"].astype(float) if use_intraday else None
 
     # Persistent state carried across days.
     prev_equity = float(initial_capital)
     prev_exposure = 0.0
     prev_target_weight = 0.0
     last_exec_weight = 0.0  # target weight at the last actual rebalance
+    prev_close = float(close.iloc[0])  # notional price basis for the next day
+    entry_price = 0.0  # close at which the current exposure was opened
     liquidated = False
 
     records: list[dict[str, Any]] = []
@@ -244,9 +265,13 @@ def run_backtest(
         if force_liquidate_now:
             target_exposure_notional = 0.0
             last_exec_weight = 0.0
+            entry_price = 0.0
         elif rebalance:
             target_exposure_notional = target_w * equity_before_trade
             last_exec_weight = target_w
+            # The (re)opened position's entry basis is the prior close, which is
+            # the price level going into today's holding period.
+            entry_price = prev_close if target_exposure_notional != 0 else 0.0
         else:
             # Carry the (drifted) position forward; no trade.
             target_exposure_notional = prev_exposure
@@ -296,6 +321,7 @@ def run_backtest(
                     "leverage_breach": bool(risk_breach),
                     "liquidated": True,
                     "rebalanced": bool(rebalance or force_liquidate_now),
+                    "intraday_exit": False,
                     "strategy_daily_return": (0.0 / prev_equity - 1.0)
                     if prev_equity
                     else 0.0,
@@ -307,9 +333,42 @@ def run_backtest(
             prev_target_weight = target_w
             continue
 
-        pnl = exposure_after * ret_t
+        # --- Optional intraday take-profit / stop-loss using the day's H/L. ---
+        # The exposure's notional basis for today is prev_close; TP/SL levels are
+        # measured from entry_price (set when the position was opened, before
+        # today). A touch closes the position intraday at the level.
+        intraday_exit = False
+        day_ret = ret_t  # default: close-to-close
+        if use_intraday and exposure_after != 0 and entry_price > 0 and not force_liquidate_now:
+            high_t = float(high.loc[date])
+            low_t = float(low.loc[date])
+            exit_price: float | None = None
+            if exposure_after > 0:  # long: stop below, target above
+                sl = entry_price * (1 - stop_loss_pct) if stop_loss_pct else None
+                tp = entry_price * (1 + take_profit_pct) if take_profit_pct else None
+                if sl is not None and low_t <= sl:
+                    exit_price = sl
+                elif tp is not None and high_t >= tp:
+                    exit_price = tp
+            else:  # short: stop above, target below
+                sl = entry_price * (1 + stop_loss_pct) if stop_loss_pct else None
+                tp = entry_price * (1 - take_profit_pct) if take_profit_pct else None
+                if sl is not None and high_t >= sl:
+                    exit_price = sl
+                elif tp is not None and low_t <= tp:
+                    exit_price = tp
+            if exit_price is not None:
+                intraday_exit = True
+                day_ret = exit_price / prev_close - 1.0  # basis is prev_close
+
+        pnl = exposure_after * day_ret
         equity_end = equity_after_cost + pnl
-        exposure_notional_end = exposure_after * (1.0 + ret_t)
+        if intraday_exit:
+            exposure_notional_end = 0.0  # position closed intraday -> flat
+            last_exec_weight = 0.0  # allow re-entry next day per signal
+            entry_price = 0.0
+        else:
+            exposure_notional_end = exposure_after * (1.0 + ret_t)
 
         end_liquidated = force_liquidate_now
         if equity_end <= 0:
@@ -357,6 +416,7 @@ def run_backtest(
                 "leverage_breach": bool(leverage_breach_end),
                 "liquidated": bool(end_liquidated),
                 "rebalanced": bool(rebalance or force_liquidate_now),
+                "intraday_exit": bool(intraday_exit),
                 "strategy_daily_return": strategy_daily_return,
             }
         )
@@ -365,6 +425,7 @@ def run_backtest(
         prev_equity = equity_end
         prev_exposure = exposure_notional_end
         prev_target_weight = target_w
+        prev_close = close_t
 
     result = pd.DataFrame.from_records(records).set_index("date")
     return result
@@ -406,5 +467,6 @@ def _flat_record(
         "leverage_breach": False,
         "liquidated": True,
         "rebalanced": False,
+        "intraday_exit": False,
         "strategy_daily_return": 0.0,
     }
