@@ -127,6 +127,21 @@ Conclusion: the current 9-factor composite (conf_gain=1.0, test 0.94/2.30) survi
 220k-eval search over new free data - strong evidence it is robust. No production change.
 The episode is a clean case study in why disciplined multi-fold + tail checks matter.
 
+## Shorting (allow_short) - disciplined shorts cut drawdown, validation-justified
+
+The engine always supported shorts (spec: min_weight -2.0); the strategy was long/flat.
+Enabling shorts on STRONG bear conviction (tilt 0.5 -> 0.25 + allow_short) is a genuine,
+validation-justified improvement:
+- Validation Sharpe HOLDS (~1.40, vs ~1.36-1.41 long/flat) - not test-peeked.
+- Full-sample drawdown -61% -> -43% (BH -83%); full Sharpe 1.06 -> 1.14.
+- Test improves to 0.93-0.99 / 2.03-2.11 (vs 0.83 / 1.99); all horizon cells beat BH.
+- Profits in the 2022 & 2026 bears (yearly Sharpe -0.2/-1.5 -> positive) instead of
+  sitting flat.
+The shorts are modest and safe: short only ~19% of days, max -0.75x, no liquidation.
+tilt=0.0 (full symmetric short) OVER-shorts the recoveries and drops validation to 1.14;
+tilt=0.5+short barely protects (-61%). tilt=0.25 is the balance. allow_short=false keeps
+the long/flat profile (sits out bears). Now the config default.
+
 ## What works
 
 - **Volatility targeting + diversified trend ensemble** — lower drawdown

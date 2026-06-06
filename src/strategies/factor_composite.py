@@ -60,6 +60,7 @@ def generate_signals(df: pd.DataFrame, params: dict) -> pd.Series:
     vol_window = int(params.get("vol_window", 45))
     max_w = float(params.get("max_weight", 2.0))
     confidence_gain = float(params.get("confidence_gain", 0.0))
+    allow_short = bool(params.get("allow_short", False))
     mode = params.get("mode", "walkforward")
 
     if mode == "fixed":
@@ -78,6 +79,10 @@ def generate_signals(df: pd.DataFrame, params: dict) -> pd.Series:
     eff_target_vol = target_vol * (1.0 + confidence_gain * score.clip(lower=0.0))
     vt_size = (eff_target_vol / rvol).clip(upper=max_w)
 
-    weight = ((tilt + score).clip(0.0, max_w) * vt_size).clip(0.0, max_w)
+    # When allow_short, the directional weight may go negative (short in strong
+    # bear conviction, i.e. tilt + score < 0); confidence_gain only boosts longs,
+    # so shorts size at the base vol target. Otherwise long/flat (floor at 0).
+    lower = -max_w if allow_short else 0.0
+    weight = ((tilt + score) * vt_size).clip(lower, max_w)
     weight.name = "raw_signal"
     return weight

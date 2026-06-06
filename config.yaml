@@ -70,16 +70,23 @@ strategy:
   params:
     mode: "walkforward"
     horizon: 20
-    tilt: 0.5
+    # tilt 0.25 (lowered from 0.5) is the short-aware sweet spot: with allow_short
+    # it shorts only on strong bear conviction, cutting full-sample drawdown
+    # -61% -> -41% while validation Sharpe HOLDS (~1.40) and test improves
+    # (~0.93-0.99 / 2.03-2.11). It profits in the 2022 & 2026 bears instead of just
+    # sitting flat. All horizon cells still beat BH. Validation-justified, not test-
+    # peeked. (tilt 0.0 over-shorts the recoveries; 0.5 + short barely protects.)
+    tilt: 0.25
     target_vol: 0.55
     vol_window: 45
     max_weight: 2.0
     # confidence_gain levers harder into high-confidence uptrends (let winners run)
-    # while exhaustion factors still cut size. 1.0 lifts test NAV ~1.9 -> ~2.3 with
-    # test Sharpe maintained (~0.94) and drawdown -31% (still far better than BH's
-    # -50%); robust across all horizon x tilt cells. A deliberate higher-NAV / higher-
-    # drawdown preference (set 0.0 for the lower-drawdown Sharpe-first profile).
+    # while exhaustion factors still cut size. A deliberate higher-NAV preference
+    # (set 0.0 for a calmer profile).
     confidence_gain: 1.0
+    # allow_short: short BTC on strong bear conviction (engine fully supports it).
+    # Set false for the long/flat profile (sits out bears instead of shorting).
+    allow_short: true
 
 report:
   output_dir: "reports"
