@@ -132,6 +132,52 @@ def render_markdown(table: pd.DataFrame, meta: dict) -> str:
     return "\n".join(lines)
 
 
+def render_html(table: pd.DataFrame, meta: dict, primary_band: float | None = None) -> str:
+    """Render the guidance as an HTML email: one row per band, requested columns.
+
+    Columns: Band | Trades/yr | Test Sh/NAV | Full Sh/DD | Holding now |
+    Days since trade | Action. The configured band row is highlighted; a
+    REBALANCE action is flagged red, HOLD grey.
+    """
+    th = ("padding:6px 10px;border:1px solid #ddd;background:#f4f4f4;"
+          "text-align:center;font-size:13px")
+    td = "padding:6px 10px;border:1px solid #ddd;text-align:center;font-size:13px"
+    head = "".join(
+        f"<th style='{th}'>{h}</th>" for h in
+        ["Band", "Trades/yr", "Test Sh / NAV", "Full Sh / DD",
+         "Holding now", "Days since trade", "Action now"]
+    )
+    body_rows = []
+    for _, r in table.iterrows():
+        is_primary = primary_band is not None and abs(r["band"] - primary_band) < 1e-9
+        is_trade = str(r["action_now"]).startswith("REBALANCE")
+        rowbg = "background:#fff7e6;font-weight:bold" if is_primary else ""
+        act_color = "#c0392b" if is_trade else "#888"
+        body_rows.append(
+            f"<tr style='{rowbg}'>"
+            f"<td style='{td}'>{r['band']:.2f}</td>"
+            f"<td style='{td}'>{r['trades_per_yr']}</td>"
+            f"<td style='{td}'>{r['test_sharpe']:.2f} / {r['test_nav']:.2f}</td>"
+            f"<td style='{td}'>{r['full_sharpe']:.2f} / {r['full_maxdd']:.0f}%</td>"
+            f"<td style='{td}'>{r['now_holding']:.2f}x</td>"
+            f"<td style='{td}'>{r['days_since_trade']}</td>"
+            f"<td style='{td};color:{act_color}'>{r['action_now']}</td>"
+            f"</tr>"
+        )
+    return (
+        f"<div style='font-family:-apple-system,Helvetica,Arial,sans-serif;color:#222'>"
+        f"<h2 style='margin:0 0 4px'>BTC factor_composite — daily guidance</h2>"
+        f"<p style='margin:2px 0;color:#555'>As of <b>{meta['as_of']}</b> · "
+        f"BTC close <b>${meta['btc_close']:,.0f}</b> · "
+        f"signal target <b>{meta['signal_target']:.2f}x</b></p>"
+        f"<table style='border-collapse:collapse;margin-top:8px'>"
+        f"<thead><tr>{head}</tr></thead><tbody>{''.join(body_rows)}</tbody></table>"
+        f"<p style='color:#888;font-size:12px;margin-top:10px'>Highlighted row = your "
+        f"configured band. Buy-and-hold reference: Test 0.58 / 1.50, Full DD -83%. "
+        f"Research guidance — act manually.</p></div>"
+    )
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="config.yaml")

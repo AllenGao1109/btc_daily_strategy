@@ -21,12 +21,13 @@ import os
 import smtplib
 import ssl
 import traceback
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
 
 from src.config import load_config
 from src.data import load_btc_data
-from src.guidance import build_guidance, render_markdown
+from src.guidance import build_guidance, render_html, render_markdown
 
 CONFIG_FILE = Path(__file__).parent / "email_config.json"
 
@@ -54,11 +55,10 @@ def load_email_config() -> dict:
     return cfg
 
 
-def compose(config: dict) -> tuple[str, str]:
-    """Build (subject, body) from the latest guidance. Returns the primary-band call."""
+def compose(config: dict) -> tuple[str, str, str]:
+    """Build (subject, text_body, html_body) from the latest guidance."""
     table, meta = build_guidance(config)
     primary_band = float(config["backtest"].get("weight_band", 0.40))
-    # The row for the configured band (closest match).
     row = min(table.to_dict("records"), key=lambda r: abs(r["band"] - primary_band))
     target = meta["signal_target"]
     holding = row["now_holding"]
@@ -69,7 +69,7 @@ def compose(config: dict) -> tuple[str, str]:
     subject = (f"[BTC Strategy {meta['as_of']}] {flag}"
                + (f" -> {target:.2f}x (from {holding:.2f}x)" if is_trade else f" at {holding:.2f}x"))
 
-    body = [
+    text_body = "\n".join([
         f"BTC factor_composite - daily guidance ({meta['as_of']})",
         f"BTC close: ${meta['btc_close']:,.0f}",
         "",
@@ -82,19 +82,25 @@ def compose(config: dict) -> tuple[str, str]:
         ("  >> A position change is signaled today. <<" if is_trade
          else "  >> No change. Hold. <<"),
         "",
-        "Full multi-band guidance below.",
-        "",
         render_markdown(table, meta),
-    ]
-    return subject, "\n".join(body)
+    ])
+    html_body = render_html(table, meta, primary_band=row["band"])
+    return subject, text_body, html_body
 
 
-def send_email(ecfg: dict, subject: str, body: str) -> None:
-    """Send a plain-text email over SMTP (STARTTLS)."""
-    msg = MIMEText(body, "plain", "utf-8")
+def _build_message(ecfg: dict, subject: str, text_body: str, html_body: str) -> MIMEMultipart:
+    """Assemble a multipart/alternative email (HTML with plain-text fallback)."""
+    msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = ecfg["sender"]
     msg["To"] = ecfg["recipient"]
+    msg.attach(MIMEText(text_body, "plain", "utf-8"))
+    msg.attach(MIMEText(html_body, "html", "utf-8"))
+    return msg
+
+
+def send_email(ecfg: dict, msg: MIMEMultipart) -> None:
+    """Send a prepared multipart email over SMTP (STARTTLS)."""
     ctx = ssl.create_default_context()
     with smtplib.SMTP(ecfg["smtp_host"], int(ecfg["smtp_port"]), timeout=30) as s:
         s.starttls(context=ctx)
@@ -117,19 +123,25 @@ def main():
             print(f"[warn] data refresh failed, using cache: {exc}")
 
     try:
-        subject, body = compose(config)
+        subject, text_body, html_body = compose(config)
     except Exception:
         subject = "[BTC Strategy] ERROR generating guidance"
-        body = "The daily guidance job failed:\n\n" + traceback.format_exc()
+        text_body = "The daily guidance job failed:\n\n" + traceback.format_exc()
+        html_body = f"<pre>{text_body}</pre>"
 
     if args.dry_run:
         print("SUBJECT:", subject)
         print("-" * 60)
-        print(body)
+        print(text_body)
+        print("-" * 60, "\n[HTML body generated:", len(html_body), "chars]")
+        Path("logs").mkdir(exist_ok=True)
+        Path("logs/email_preview.html").write_text(html_body)
+        print("HTML preview saved -> logs/email_preview.html")
         return
 
     ecfg = load_email_config()
-    send_email(ecfg, subject, body)
+    msg = _build_message(ecfg, subject, text_body, html_body)
+    send_email(ecfg, msg)
     print(f"Sent: {subject}")
 
 
