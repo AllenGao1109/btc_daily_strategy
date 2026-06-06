@@ -1,0 +1,7 @@
+[start] candidates=83, alts=12, deadline=8.0h
+[filter] IC-robust train+val: 36 / 83
+[baseline] fold_mean=1.329 fold_min=-0.728 test=0.94/2.30
+[FS +sharpe_mom_120] set=10 fold_mean=1.466 fold_min=-0.400 test=0.93/2.26
+[FS +alts_above_50dma] set=11 fold_mean=1.478 fold_min=-0.099 test=0.88/2.09
+[FS +btc_vs_alts_30] set=12 fold_mean=1.483 fold_min=-0.051 test=0.86/2.05
+[FS done] best fold_mean=1.483 set=['halving_cos', 'kurt_30', 'vol_regime', 'mvrv_z_365', 'mom_120', 'mvrv_mom_30', 'ex_netflow_to_mcap', 'btc_eth_rs_30', 'rvol_z90', 'sharpe_mom_120', 'alts_above_50dma', 'btc_vs_alts_30']
