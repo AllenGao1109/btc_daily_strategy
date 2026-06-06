@@ -26,14 +26,12 @@ backtest:
   rebalance_policy: "signal_change_or_risk_control"
   leverage_breach_action: "delever_next_day"
   stop_trading_if_equity_zero: true
-  # No-trade band. 0.40 minimizes decisions (~8-10 trades/year vs 15 at 0.30) and
-  # is validation-justified for the confidence_gain=1.0 strategy: validation Sharpe
-  # 1.28 -> 1.36 with HALF the trades. All 9 horizon x tilt cells still beat BH on
-  # test (Sharpe 0.76-0.88, NAV 1.79-2.23). Honest cost vs 0.30: the deployed-point
-  # test eases 0.94/2.30 -> 0.83/1.99 and full-sample drawdown -54% -> -61% (slower
-  # risk response). Deliberately trading less, per the 0.5% fee + "few decisions"
-  # preference; selected by validation, not by peeking at test.
-  weight_band: 0.40
+  # No-trade band = the tracked decision-frequency profile. Set to 0.20 (owner's
+  # choice): across 0.05-0.60 it shows the best blend of test Sharpe/NAV (~1.03/2.16)
+  # and full-sample Sharpe (~1.26) at a still-modest ~24 trades/year. Lower bands
+  # (0.05-0.10) over-trade (fees); higher (0.40-0.60) trade less but ease the metrics.
+  # The daily email highlights this band and reports its current action/holding.
+  weight_band: 0.20
 
 funding:
   enabled: true
