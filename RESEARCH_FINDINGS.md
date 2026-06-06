@@ -100,6 +100,25 @@ train+val bar without test-peeking.
   Trading less is materially better given the 0.5% per-trade fee. (0.40 cut more
   fees but blew full-sample drawdown out to -67%.)
 
+## Higher frequency (hourly) - explored, does NOT help under 0.5% fees
+
+Built an hourly BTC pipeline (load_btc_hourly: 65k bars 2019-2026, cached) and
+explored intraday signal honestly:
+- Short-horizon MEAN-REVERSION is real and robust (1-6h, IC ~-0.06 same sign
+  train+val) but UNTRADEABLE: the per-trade edge (~0.03%) is ~15x smaller than the
+  0.5% fee. The fee is the binding constraint.
+- Hour-of-day and day-of-week seasonality are NOT robust (train<->val unstable;
+  hour-profile correlation -0.22).
+- Intraday-derived DAILY features (realized vol, range, end-of-day momentum, skew,
+  volume concentration, close-in-range): only realized-vol and high-low range are
+  IC-robust, and both DUPLICATE the existing daily vol_regime/rvol_z90 factors - no
+  new orthogonal signal.
+- Using intraday realized vol for position SIZING is WORSE than the daily estimate
+  (test Sharpe 0.92->0.87, drawdown -24%->-31%, more trades).
+Conclusion: with a 0.5% per-trade fee, higher frequency adds no tradeable alpha -
+the fee forces low turnover, and at low turnover intraday data carries no signal
+beyond what daily already captures. Hourly loader kept as infrastructure.
+
 ## What does NOT work (tested, documented, not hidden)
 
 - **Unattended factor search saturation** (factor_search.py): forward selection over

@@ -267,8 +267,43 @@ def load_eth_close(index: pd.DatetimeIndex, start_date: str = "2016-01-01") -> p
     return eth.reindex(index).ffill().rename("eth_close")
 
 
+def load_btc_hourly(
+    start_date: str = "2019-01-01",
+    symbol: str = "BTC/USD",
+    cache_dir: Path | None = None,
+    force_reload: bool = False,
+) -> pd.DataFrame:
+    """Load hourly BTC OHLCV from CryptoCompare (free, paginated), cached to disk.
+
+    Args:
+        start_date: Earliest hour to fetch (ISO date).
+        symbol: Pair (split into fsym/tsym).
+        cache_dir: Cache directory (defaults to data/processed).
+        force_reload: Re-fetch even if cached.
+
+    Returns:
+        DataFrame indexed by a UTC hourly ``DatetimeIndex`` with columns
+        ``[open, high, low, close, volume]``, sorted ascending, validated.
+    """
+    cache_dir = cache_dir or PROCESSED_DIR
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    path = cache_dir / "BTC-USD_1h.csv"
+    if path.exists() and not force_reload:
+        df = _read_cache(path)
+    else:
+        df = _download_cryptocompare(symbol, start_date, frequency="hour")
+        df.to_csv(path)
+    df = _slice_dates(df, start_date, None)
+    # Light validation: positive prices, sorted, unique.
+    assert df.index.is_monotonic_increasing, "hourly index not sorted"
+    assert not df.index.has_duplicates, "duplicate hourly timestamps"
+    assert (df["close"] > 0).all(), "non-positive hourly close"
+    return df
+
+
 def _download_cryptocompare(
-    symbol: str, start_date: str | None, *, page_limit: int = 2000
+    symbol: str, start_date: str | None, *, page_limit: int = 2000,
+    frequency: str = "day",
 ) -> pd.DataFrame:
     """Download daily OHLCV from CryptoCompare's free histoday endpoint.
 
@@ -293,12 +328,15 @@ def _download_cryptocompare(
         int(pd.Timestamp(start_date, tz="UTC").timestamp()) if start_date else 0
     )
 
+    endpoint = "histohour" if frequency == "hour" else "histoday"
+    max_pages = 60 if frequency == "hour" else 20  # hourly needs far more pages
+
     rows: list[dict] = []
     to_ts: int | None = None
     # Hard stop on pages to avoid an infinite loop if the API misbehaves.
-    for _ in range(20):
+    for _ in range(max_pages):
         url = (
-            "https://min-api.cryptocompare.com/data/v2/histoday"
+            f"https://min-api.cryptocompare.com/data/v2/{endpoint}"
             f"?fsym={fsym}&tsym={tsym}&limit={page_limit}"
         )
         if to_ts is not None:
