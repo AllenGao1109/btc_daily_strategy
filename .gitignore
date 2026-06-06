@@ -23,3 +23,6 @@ results/*.csv
 
 # Local email credentials (never commit)
 email_config.json
+
+# Local logs and email previews
+logs/
