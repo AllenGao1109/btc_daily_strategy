@@ -103,6 +103,105 @@ def _slice_dates(
     return df
 
 
+def _http_json(url: str, timeout: int = 25) -> dict:
+    """GET a JSON URL with a browser User-Agent (some hosts block default UA)."""
+    import json
+    import urllib.request
+
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def load_fear_greed(index: pd.DatetimeIndex) -> pd.Series:
+    """Load the Crypto Fear & Greed Index (alternative.me), daily, history to 2018.
+
+    A free market-sentiment series in [0, 100] (0 = extreme fear, 100 = extreme
+    greed). Causal: each day's value is known that day; the engine lags any signal.
+
+    Returns:
+        Series named ``fng`` aligned to ``index`` (NaN before 2018 / where missing).
+    """
+    try:
+        data = _http_json("https://api.alternative.me/fng/?limit=0&format=json")["data"]
+    except Exception:  # pragma: no cover - network
+        return pd.Series(np.nan, index=index, name="fng")
+    s = pd.Series(
+        {pd.Timestamp(int(x["timestamp"]), unit="s", tz="UTC").normalize(): float(x["value"])
+         for x in data}
+    ).sort_index()
+    return s.reindex(index).rename("fng")
+
+
+def load_yahoo_close(symbol: str, index: pd.DatetimeIndex, name: str) -> pd.Series:
+    """Load a daily close series from Yahoo Finance, aligned + forward-filled.
+
+    Used for macro/cross-asset factors (S&P 500, dollar index, VIX, gold). Markets
+    are closed on weekends/holidays, so values are forward-filled onto BTC's 24/7
+    calendar using only past data (causal). The engine lags any resulting signal.
+
+    Args:
+        symbol: Yahoo ticker (e.g. ``"^GSPC"``, ``"DX-Y.NYB"``, ``"^VIX"``).
+        index: BTC DatetimeIndex to align to.
+        name: Output column name (e.g. ``"spx_close"``).
+
+    Returns:
+        Series named ``name`` aligned to ``index`` (forward-filled, NaN warmup).
+    """
+    import urllib.parse
+
+    sym = urllib.parse.quote(symbol)
+    url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}"
+           "?period1=1451606400&period2=9999999999&interval=1d")
+    try:
+        r = _http_json(url)["chart"]["result"][0]
+        ts, cl = r["timestamp"], r["indicators"]["quote"][0]["close"]
+    except Exception:  # pragma: no cover - network
+        return pd.Series(np.nan, index=index, name=name)
+    s = pd.Series(
+        {pd.Timestamp(t, unit="s", tz="UTC").normalize(): c for t, c in zip(ts, cl) if c is not None}
+    ).sort_index()
+    return s.reindex(index).ffill().rename(name)
+
+
+def enrich_external(df: pd.DataFrame, cache_dir: Path | None = None,
+                    force_reload: bool = False) -> pd.DataFrame:
+    """Add macro + sentiment columns (fng, spx_close, dxy_close, vix_close), cached.
+
+    Fetches the Fear & Greed Index and Yahoo macro series once and caches them to
+    ``data/processed/external.csv`` (Yahoo rate-limits, so caching matters). All
+    series are causal and forward-filled onto the BTC calendar; the engine lags any
+    resulting signal. On a fetch failure the affected column is left NaN and the
+    factors that need it are simply skipped.
+
+    Args:
+        df: BTC frame to enrich (returned with extra columns).
+        cache_dir: Directory for the cache (defaults to data/processed).
+        force_reload: Re-fetch even if the cache exists.
+
+    Returns:
+        ``df`` with the external columns merged in.
+    """
+    cache_dir = cache_dir or PROCESSED_DIR
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    path = cache_dir / "external.csv"
+
+    if path.exists() and not force_reload:
+        ext = _read_cache(path)
+    else:
+        ext = pd.DataFrame(index=df.index)
+        ext["fng"] = load_fear_greed(df.index)
+        ext["spx_close"] = load_yahoo_close("^GSPC", df.index, "spx_close")
+        ext["dxy_close"] = load_yahoo_close("DX-Y.NYB", df.index, "dxy_close")
+        ext["vix_close"] = load_yahoo_close("^VIX", df.index, "vix_close")
+        ext.to_csv(path)
+
+    for col in ["fng", "spx_close", "dxy_close", "vix_close"]:
+        if col in ext.columns:
+            df[col] = ext[col].reindex(df.index)
+    return df
+
+
 def load_okx_funding(index: pd.DatetimeIndex) -> pd.Series:
     """Load daily-aggregated BTC perpetual funding rate from OKX (positioning).
 

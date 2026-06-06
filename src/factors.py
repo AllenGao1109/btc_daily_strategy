@@ -128,6 +128,27 @@ def build_factors(df: pd.DataFrame) -> pd.DataFrame:
         out["btc_eth_rs_30"] = close.pct_change(30) - eth.pct_change(30)
         out["btc_dominance_mom"] = (close / eth).pct_change(30)
 
+    # --- macro / cross-asset (orthogonal to crypto internals; if present) ---
+    if "spx_close" in df.columns:
+        spx = df["spx_close"].astype(float)
+        out["spx_mom20"] = spx.pct_change(20)
+        out["spx_mom60"] = spx.pct_change(60)
+    if "dxy_close" in df.columns:
+        dxy = df["dxy_close"].astype(float)
+        out["dxy_mom20"] = dxy.pct_change(20)
+        out["dxy_mom60"] = dxy.pct_change(60)
+    if "vix_close" in df.columns:
+        vix = df["vix_close"].astype(float)
+        out["vix_level_z"] = (vix - vix.rolling(180).mean()) / vix.rolling(180).std()
+        out["vix_mom20"] = vix.pct_change(20)
+
+    # --- sentiment: Crypto Fear & Greed Index (if present) ---
+    if "fng" in df.columns:
+        fng = df["fng"].astype(float)
+        out["fng_level"] = fng
+        out["fng_dev30"] = fng - fng.rolling(30).mean()
+        out["fng_z90"] = (fng - fng.rolling(90).mean()) / fng.rolling(90).std()
+
     # NOTE: perp funding-rate factors were evaluated but OKX's public funding
     # history only returns ~90 days, so they cannot be backtested over 2017-2026
     # (insufficient overlap with the train/val windows). The loader is kept for

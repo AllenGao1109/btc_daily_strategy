@@ -112,6 +112,16 @@ train+val bar without test-peeking.
   funding-rate-history endpoint returns only ~90 days - no overlap with the train/val
   windows, so it cannot be backtested. Loader kept for live use; not in the composite.
   Real further edge needs NEW HISTORICAL data (paid on-chain, order-book, sentiment).
+- **Macro + sentiment (FREE, with history) - real signal, but no improvement.** Correcting
+  the earlier "free data exhausted" claim: Fear & Greed (alternative.me, 2018+), and macro
+  via Yahoo (S&P500, dollar index, VIX, gold; 2017+) are reachable and orthogonal to crypto
+  internals. Several are train+val IC-robust (spx_mom20 val IC -0.186; fng_level +0.105;
+  dxy_mom). BUT adding them does NOT improve the walk-forward composite: spx_mom20/fng_level
+  pass the all-cells-beat guardrail yet lower the validation metric (1.27->1.19/1.12) and are
+  NEUTRAL on test (Sharpe -0.01, NAV +0.03). The crypto-internal factors already capture the
+  available predictability; macro is redundant at the margin. Loaders + factors kept (tested,
+  available for live use); DEFAULT_FACTORS unchanged. The composite is robust to orthogonal
+  additions (the test win holds when macro is added) - reassuring, not improving.
 
 - **Standalone next-day ML** (500 experiments): mean OOS test Sharpe -0.28;
   top-validation configs were test-negative (val 1.29 -> test -0.34). Of 36

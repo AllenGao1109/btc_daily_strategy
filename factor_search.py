@@ -31,7 +31,7 @@ import numpy as np
 import pandas as pd
 
 from src.config import BacktestConfig, load_config
-from src.data import load_btc_data, load_eth_close
+from src.data import enrich_external, load_btc_data, load_eth_close
 from src.factors import (
     build_factors,
     composite_signal_walkforward,
@@ -123,6 +123,7 @@ def main():
     bt = BacktestConfig.from_config(cfg)
     df = merge_onchain(build_features(load_btc_data(cfg)), load_coinmetrics(ONCHAIN_METRICS))
     df["eth_close"] = load_eth_close(df.index)
+    df = enrich_external(df)  # macro (spx/dxy/vix) + sentiment (fng)
     splits = make_fixed_split(cfg["validation"])
     tr = splits["train"].slice(df).index
     va = splits["validation"].slice(df).index
