@@ -57,6 +57,14 @@ FACTOR_LABELS = {
     "ex_netflow_to_mcap": "Exchange flows", "btc_eth_rs_30": "BTC vs ETH strength",
     "rvol_z90": "Realized-vol stress",
 }
+FACTOR_LABELS_ZH = {
+    "halving_cos": "减半周期", "kurt_30": "尾部风险(峰度)",
+    "vol_regime": "波动率状态", "mvrv_z_365": "估值(MVRV)",
+    "mom_120": "长期动量", "mvrv_mom_30": "估值动量",
+    "ex_netflow_to_mcap": "交易所资金流", "btc_eth_rs_30": "BTC对ETH强弱",
+    "rvol_z90": "已实现波动压力",
+}
+LEAN_ZH = {"bullish": "看多", "bearish": "看空", "neutral": "中性"}
 
 
 def factor_breakdown(df: pd.DataFrame, factor_names: list[str], horizon: int = 20) -> list[dict]:
@@ -78,11 +86,14 @@ def factor_breakdown(df: pd.DataFrame, factor_names: list[str], horizon: int = 2
         if np.isnan(z) or ic == 0:
             continue
         contrib = float(np.sign(ic) * z)
+        lean = "bullish" if contrib > 0.15 else ("bearish" if contrib < -0.15 else "neutral")
         out.append({
             "factor": FACTOR_LABELS.get(n, n),
+            "factor_zh": FACTOR_LABELS_ZH.get(n, n),
             "z": round(float(z), 2),
             "contribution": round(contrib, 2),
-            "lean": "bullish" if contrib > 0.15 else ("bearish" if contrib < -0.15 else "neutral"),
+            "lean": lean,
+            "lean_zh": LEAN_ZH[lean],
         })
     return sorted(out, key=lambda d: abs(d["contribution"]), reverse=True)
 
@@ -130,6 +141,22 @@ def make_summary(meta: dict, row: dict, breakdown: list[dict], ctx: dict, perf: 
         f"{ctx['ret_30d']:+.0f}% over 30d, {ctx['from_high_365d']:+.0f}% from its 1-yr high. "
         f"Strategy YTD {perf['ytd']:+.0f}%, 90d {perf['ret_90d']:+.0f}%. "
         f"Main drivers: {drivers}."
+    )
+
+
+def make_summary_zh(meta: dict, row: dict, breakdown: list[dict], ctx: dict, perf: dict) -> str:
+    """中文版一句话摘要。"""
+    t = meta["signal_target"]
+    stance = ("净空头" if t < -0.05 else "做多" if t > 0.05 else "空仓/中性")
+    is_trade = str(row["action_now"]).startswith("REBALANCE")
+    drivers = "、".join(f"{b['factor_zh']}({b['lean_zh']})" for b in breakdown[:3])
+    return (
+        f"模型当前{stance}(目标仓位 {t:.2f}x)。你的档位({row['band']:.2f})建议"
+        f"{'立即换仓' if is_trade else '持有'} —— 当前 {row['now_holding']:.2f}x,"
+        f"{row['days_since_trade']} 天前交易过。BTC ${meta['btc_close']:,.0f},"
+        f"近 30 天 {ctx['ret_30d']:+.0f}%,距 1 年高点 {ctx['from_high_365d']:+.0f}%。"
+        f"策略今年以来 {perf['ytd']:+.0f}%,近 90 天 {perf['ret_90d']:+.0f}%。"
+        f"主要驱动:{drivers}。"
     )
 
 
@@ -200,6 +227,7 @@ def build_guidance(config: dict, bands: list[float] | None = None) -> tuple[pd.D
         primary_row = min(rows, key=lambda r: abs(r["band"] - primary_band))
         meta["insight"] = {
             "summary": make_summary(meta, primary_row, breakdown, ctx, perf),
+            "summary_zh": make_summary_zh(meta, primary_row, breakdown, ctx, perf),
             "breakdown": breakdown, "context": ctx, "perf": perf,
             "primary_band": primary_band,
         }
@@ -216,7 +244,10 @@ def render_markdown(table: pd.DataFrame, meta: dict) -> str:
         "",
     ]
     if ins.get("summary"):
-        lines += ["## Summary", ins["summary"], ""]
+        lines += ["## 摘要 Summary"]
+        if ins.get("summary_zh"):
+            lines += [ins["summary_zh"], ""]
+        lines += [ins["summary"], ""]
     lines += [
         f"- As of: **{meta['as_of']}**  |  BTC close: **${meta['btc_close']:,.0f}**",
         f"- Signal target exposure (band-independent): **{meta['signal_target']:.2f}x**",
@@ -271,8 +302,8 @@ def render_html(table: pd.DataFrame, meta: dict, primary_band: float | None = No
     td = "padding:6px 10px;border:1px solid #ddd;text-align:center;font-size:13px"
     head = "".join(
         f"<th style='{th}'>{h}</th>" for h in
-        ["Band", "Trades/yr", "Test Sh / NAV", "Full Sh / DD",
-         "Holding now", "Days since trade", "Action now"]
+        ["带宽<br>Band", "交易/年<br>Trades/yr", "测试 Sh/NAV<br>Test", "全样本 Sh/回撤<br>Full",
+         "当前持仓<br>Holding", "距上次交易<br>Days since", "现有动作<br>Action"]
     )
     body_rows = []
     for _, r in table.iterrows():
@@ -280,6 +311,7 @@ def render_html(table: pd.DataFrame, meta: dict, primary_band: float | None = No
         is_trade = str(r["action_now"]).startswith("REBALANCE")
         rowbg = "background:#fff7e6;font-weight:bold" if is_primary else ""
         act_color = "#c0392b" if is_trade else "#888"
+        act = str(r["action_now"]).replace("REBALANCE", "换仓 REBALANCE").replace("HOLD", "持有 HOLD")
         body_rows.append(
             f"<tr style='{rowbg}'>"
             f"<td style='{td}'>{r['band']:.2f}</td>"
@@ -288,7 +320,7 @@ def render_html(table: pd.DataFrame, meta: dict, primary_band: float | None = No
             f"<td style='{td}'>{r['full_sharpe']:.2f} / {r['full_maxdd']:.0f}%</td>"
             f"<td style='{td}'>{r['now_holding']:.2f}x</td>"
             f"<td style='{td}'>{r['days_since_trade']}</td>"
-            f"<td style='{td};color:{act_color}'>{r['action_now']}</td>"
+            f"<td style='{td};color:{act_color}'>{act}</td>"
             f"</tr>"
         )
     ins = meta.get("insight", {})
@@ -296,8 +328,9 @@ def render_html(table: pd.DataFrame, meta: dict, primary_band: float | None = No
     if ins.get("summary"):
         summary_box = (
             f"<div style='background:#eef5ff;border-left:4px solid #2d6cdf;padding:10px 14px;"
-            f"margin:8px 0;border-radius:4px;font-size:14px;line-height:1.5'>"
-            f"<b>📊 Summary</b><br>{ins['summary']}</div>"
+            f"margin:8px 0;border-radius:4px;font-size:14px;line-height:1.6'>"
+            f"<b>📊 摘要 Summary</b><br>{ins.get('summary_zh', '')}"
+            f"<br><span style='color:#555'>{ins['summary']}</span></div>"
         )
 
     extra = ""
@@ -306,52 +339,53 @@ def render_html(table: pd.DataFrame, meta: dict, primary_band: float | None = No
         for b in ins["breakdown"]:
             color = {"bullish": "#1a7f37", "bearish": "#c0392b", "neutral": "#888"}[b["lean"]]
             chips.append(
-                f"<tr><td style='{td};text-align:left'>{b['factor']}</td>"
+                f"<tr><td style='{td};text-align:left'>{b['factor_zh']} <span style='color:#999'>"
+                f"{b['factor']}</span></td>"
                 f"<td style='{td}'>{b['z']:+.2f}</td>"
-                f"<td style='{td};color:{color}'>{b['lean']} ({b['contribution']:+.2f})</td></tr>"
+                f"<td style='{td};color:{color}'>{b['lean_zh']} {b['lean']} ({b['contribution']:+.2f})</td></tr>"
             )
         extra += (
-            f"<h3 style='margin:16px 0 4px'>Why — current factor read (market psychology)</h3>"
+            f"<h3 style='margin:16px 0 4px'>为什么 · 因子市场心理读数 / Factor read</h3>"
             f"<table style='border-collapse:collapse'><thead><tr>"
-            f"<th style='{th}'>Factor</th><th style='{th}'>Std value</th>"
-            f"<th style='{th}'>Lean (contribution)</th></tr></thead>"
+            f"<th style='{th}'>因子 Factor</th><th style='{th}'>标准值 Std</th>"
+            f"<th style='{th}'>倾向(贡献) Lean</th></tr></thead>"
             f"<tbody>{''.join(chips)}</tbody></table>"
         )
     if ins.get("context"):
         c = ins["context"]
         extra += (
-            f"<h3 style='margin:16px 0 4px'>Market context</h3>"
+            f"<h3 style='margin:16px 0 4px'>行情背景 / Market context</h3>"
             f"<p style='font-size:13px;line-height:1.6;margin:0'>"
-            f"Returns: 7d {c['ret_7d']:+.1f}% · 30d {c['ret_30d']:+.1f}% · 90d {c['ret_90d']:+.1f}%<br>"
-            f"Distance from highs: {c['from_high_90d']:+.1f}% (90d) · {c['from_high_365d']:+.1f}% (1yr) "
-            f"— resistance overhead<br>"
-            f"Above 90d low: {c['from_low_90d']:+.1f}% — support below<br>"
-            f"Annualized vol (30d): {c['ann_vol_30d']:.0f}%</p>"
+            f"涨跌 Returns: 7天 {c['ret_7d']:+.1f}% · 30天 {c['ret_30d']:+.1f}% · 90天 {c['ret_90d']:+.1f}%<br>"
+            f"距高点 From highs: {c['from_high_90d']:+.1f}% (90天) · {c['from_high_365d']:+.1f}% (1年) "
+            f"— 上方压力 resistance<br>"
+            f"距 90 天低点 Above 90d low: {c['from_low_90d']:+.1f}% — 下方支撑 support<br>"
+            f"年化波动 Annualized vol (30天): {c['ann_vol_30d']:.0f}%</p>"
         )
     if ins.get("perf"):
         p = ins["perf"]
         extra += (
-            f"<h3 style='margin:16px 0 4px'>Strategy performance (your band)</h3>"
+            f"<h3 style='margin:16px 0 4px'>策略表现(你的档位) / Strategy performance</h3>"
             f"<p style='font-size:13px;line-height:1.6;margin:0'>"
-            f"30d {p.get('ret_30d', float('nan')):+.1f}% · 90d {p.get('ret_90d', float('nan')):+.1f}% · "
-            f"YTD {p.get('ytd', float('nan')):+.1f}% · current drawdown {p.get('current_drawdown', float('nan')):+.1f}%</p>"
+            f"近30天 30d {p.get('ret_30d', float('nan')):+.1f}% · 近90天 90d {p.get('ret_90d', float('nan')):+.1f}% · "
+            f"今年以来 YTD {p.get('ytd', float('nan')):+.1f}% · 当前回撤 drawdown {p.get('current_drawdown', float('nan')):+.1f}%</p>"
         )
 
     return (
-        f"<div style='font-family:-apple-system,Helvetica,Arial,sans-serif;color:#222;max-width:720px'>"
-        f"<h2 style='margin:0 0 4px'>BTC factor_composite — daily guidance</h2>"
-        f"<p style='margin:2px 0;color:#555'>As of <b>{meta['as_of']}</b> · "
-        f"BTC close <b>${meta['btc_close']:,.0f}</b> · "
-        f"signal target <b>{meta['signal_target']:.2f}x</b></p>"
+        f"<div style='font-family:-apple-system,Helvetica,Arial,sans-serif;color:#222;max-width:760px'>"
+        f"<h2 style='margin:0 0 4px'>BTC 每日仓位指引 · factor_composite daily guidance</h2>"
+        f"<p style='margin:2px 0;color:#555'>截至 As of <b>{meta['as_of']}</b> · "
+        f"BTC 收盘 <b>${meta['btc_close']:,.0f}</b> · "
+        f"信号目标仓位 signal target <b>{meta['signal_target']:.2f}x</b></p>"
         f"{summary_box}"
-        f"<h3 style='margin:16px 0 4px'>Decision guidance by band</h3>"
+        f"<h3 style='margin:16px 0 4px'>分带宽决策指引 / Decision guidance by band</h3>"
         f"<table style='border-collapse:collapse'>"
         f"<thead><tr>{head}</tr></thead><tbody>{''.join(body_rows)}</tbody></table>"
-        f"<p style='color:#888;font-size:12px;margin:4px 0 0'>Highlighted row = your "
-        f"configured band. Buy-and-hold reference: Test 0.58 / 1.50, Full DD -83%.</p>"
+        f"<p style='color:#888;font-size:12px;margin:4px 0 0'>高亮行=你当前的档位 / your band。"
+        f"买入持有参考 BH: 测试 Test 0.58/1.50, 全样本回撤 Full DD -83%。</p>"
         f"{extra}"
-        f"<p style='color:#888;font-size:12px;margin-top:14px'>Research guidance — you "
-        f"act manually; this does not place orders.</p></div>"
+        f"<p style='color:#888;font-size:12px;margin-top:14px'>仅研究指引,需你手动执行,不会自动下单。"
+        f"Research guidance — act manually; does not place orders.</p></div>"
     )
 
 

@@ -65,9 +65,9 @@ def compose(config: dict) -> tuple[str, str, str]:
     action = row["action_now"]
     is_trade = action.startswith("REBALANCE")
 
-    flag = "⚠️ REBALANCE" if is_trade else "HOLD"
-    subject = (f"[BTC Strategy {meta['as_of']}] {flag}"
-               + (f" -> {target:.2f}x (from {holding:.2f}x)" if is_trade else f" at {holding:.2f}x"))
+    flag = "⚠️ 换仓 REBALANCE" if is_trade else "持有 HOLD"
+    subject = (f"[BTC策略 {meta['as_of']}] {flag}"
+               + (f" → {target:.2f}x (原 {holding:.2f}x)" if is_trade else f" {holding:.2f}x"))
 
     text_body = "\n".join([
         f"BTC factor_composite - daily guidance ({meta['as_of']})",
