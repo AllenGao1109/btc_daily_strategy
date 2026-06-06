@@ -1,0 +1,4 @@
+candidates: 75, train+val IC-robust: 36
+baseline set (9): val_sharpe_mean=1.271 test 0.87/1.82 all_beat=True
+DONE. Final set (9): ['halving_cos', 'kurt_30', 'vol_regime', 'mvrv_z_365', 'mom_120', 'mvrv_mom_30', 'ex_netflow_to_mcap', 'btc_eth_rs_30', 'rvol_z90']
+val_sharpe_mean=1.271; checkpoint -> results/best_factor_set.json
