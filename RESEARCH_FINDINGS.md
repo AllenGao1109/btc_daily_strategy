@@ -4,12 +4,17 @@ Running log of honest out-of-sample conclusions. The governing rule: a strategy
 is only "better" if it beats buy-and-hold robustly out-of-sample, selected
 without peeking at the test window.
 
-## Headline conclusion (as of the latest round)
+## Headline conclusion (current)
 
-**No strategy found so far robustly beats buy-and-hold on BOTH Sharpe and NAV.**
-The vol-targeted trend ensemble offers genuinely lower drawdown (and higher
-full-sample Sharpe), but it gives up NAV in bull markets, and on a year-by-year
-basis buy-and-hold has the best risk-adjusted return.
+**`factor_composite` beats buy-and-hold out-of-sample on BOTH Sharpe and NAV,
+confirmed under walk-forward.** Walk-forward test (2024-2026): Sharpe 0.86-0.88 /
+NAV 1.80-1.84 vs BH 0.58 / 1.50, at roughly half the drawdown, deterministically,
+with all horizon x tilt neighborhood cells beating BH. Honest caveats: on the
+in-sample train+val years walk-forward trails BH (0.80 vs 1.12 - early years lack
+sign history), and full-sample total return trails BH because vol-targeting gives
+up the 2017-2021 bull. The robust win is out-of-sample and on risk-adjusted terms.
+Earlier rounds (ML, RL, trend ensemble) did NOT beat BH robustly - see below for
+the documented dead-ends and the mirages that disciplined re-testing caught.
 
 ## RESULT: factor_composite beats buy-and-hold OOS on both Sharpe and NAV
 
