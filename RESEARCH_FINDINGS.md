@@ -100,6 +100,26 @@ train+val bar without test-peeking.
   Trading less is materially better given the 0.5% per-trade fee. (0.40 cut more
   fees but blew full-sample drawdown out to -67%.)
 
+## Upside-confidence / "predict the weekly high" - sound idea, take-profit backfires
+
+Tested reframing the target from "tomorrow's return" to "confidence of upside over
+the next week" (triple-barrier labeling: does price hit +X% before -X% within H=7d).
+- The triple-barrier upside-confidence label IS predictable and CLEAN: composite IC
+  ~0.15, halving_cos ~0.13-0.19, mvrv ~0.07, robust train+val. Crucially the VOL TRAP
+  vanishes - vol_regime does NOT predict it (symmetric barriers measure directional
+  asymmetry, not magnitude). So the reframing is methodologically sound.
+- BUT it predicts the SAME signal the composite already captures (IC ~0.15, not higher
+  than the composite's +0.18/+0.20 on forward return). No new prediction alpha.
+- Predicting the weekly HIGH directly (fwd_max) is WORSE - dominated by the mechanical
+  "high vol => high max" effect; real directional factors flip sign train->val.
+- TAKE-PROFIT EXECUTION (exit at the predicted +barrier) is actively HARMFUL: test
+  Sharpe -0.72..-0.04 / NAV 0.57..0.92 vs the hold version's 0.65 / 2.24. Two reasons:
+  turnover explodes (408-512 vs 86 trades -> fees) AND it caps BTC's fat right tail
+  (the few huge trends that drive all returns). BTC is trend/fat-tailed: let winners
+  run. This is precisely why the composite holds + sizes by vol-target and never caps
+  upside. (Side note: the long-only confidence-gated HOLD reaches NAV 2.24 > composite
+  1.82 but at lower Sharpe 0.65 - a NAV/Sharpe trade, not a clean win.)
+
 ## Higher frequency (hourly) - explored, does NOT help under 0.5% fees
 
 Built an hourly BTC pipeline (load_btc_hourly: 65k bars 2019-2026, cached) and
