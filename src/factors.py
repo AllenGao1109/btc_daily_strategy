@@ -102,6 +102,12 @@ def build_factors(df: pd.DataFrame) -> pd.DataFrame:
     out["rvol_30"] = rv
     out["vol_of_vol_30"] = rv.rolling(30).std()
     out["vol_regime"] = rv / ret.rolling(180).std()  # short vs long vol
+    rv20 = ret.rolling(20).std()
+    out["rvol_z90"] = (rv20 - rv20.rolling(90).mean()) / rv20.rolling(90).std()
+    # Downside vs upside volatility asymmetry (risk skew).
+    out["vol_asym"] = ret.clip(upper=0).rolling(30).std() / ret.clip(lower=0).rolling(30).std()
+    # Term structure of momentum: fast minus slow.
+    out["mom_term_struct"] = close.pct_change(20) - close.pct_change(120)
 
     # --- return distribution ---
     out["skew_30"] = ret.rolling(30).skew()

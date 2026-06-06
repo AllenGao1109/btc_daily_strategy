@@ -55,6 +55,14 @@ not a single 2021 train cut) was run to check the edge is not a train-cut artifa
 The production strategy now uses WALK-FORWARD signs (mode='walkforward') - the
 deployment-correct design with no train-cut dependence.
 
+### Cycle: added rvol_z90 (realized-vol z-score / capitulation factor)
+Selected by train+val IC (val 0.357) with the test neighborhood used only as a
+do-no-harm guardrail. Under walk-forward it improves the WORST neighborhood cell
+(min test Sharpe 0.73->0.80, min NAV 1.51->1.59), lowers drawdown (-29%->-26%),
+keeps turnover flat, and all 9 horizon x tilt cells still beat BH on test Sharpe
+AND NAV. Full-sample Sharpe 1.03->1.23. mom_term_struct was REJECTED (broke the
+all-cells-beat guardrail). OKX funding rate confirmed reachable for a future cycle.
+
 ## How the lead was built: factor mining (deterministic)
 
 Pivoting from "more models on the same features" to MINING NEW FACTORS found the

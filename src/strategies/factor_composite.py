@@ -25,6 +25,8 @@ DEFAULT_FACTORS = [
     "halving_cos", "kurt_30", "vol_regime", "mvrv_z_365",
     "mom_120", "mvrv_mom_30", "ex_netflow_to_mcap",
     "btc_eth_rs_30",  # BTC relative strength vs ETH — the factor that cleared BH
+    "rvol_z90",       # realized-vol z-score (capitulation/mean-reversion); improves
+                      # the worst walk-forward neighborhood cell and lowers drawdown
 ]
 
 
