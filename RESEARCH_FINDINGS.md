@@ -39,6 +39,22 @@ Caveat: full-sample total return trails BH because vol-targeting gives up the
 2017-2021 bull; the win is out-of-sample (the deployment-relevant window) and on
 risk-adjusted terms throughout.
 
+### Walk-forward hardening (honest correction)
+
+A true walk-forward test (re-estimate factor IC signs each year on past-only data,
+not a single 2021 train cut) was run to check the edge is not a train-cut artifact:
+  - GOOD: the out-of-sample TEST win SURVIVES walk-forward - Sharpe 0.86 / NAV 1.80
+    vs BH 0.58 / 1.50, and ALL 9 horizon x tilt neighborhood cells beat BH on test
+    Sharpe AND NAV. Re-estimated signs are stable year-to-year (halving_cos ~0.2,
+    btc_eth_rs ~+0.15, exchange-flow ~-0.15 every year) - the factors are genuine.
+  - HONEST CORRECTION: the earlier fixed-cut train+val number (1.41) was mildly
+    inflated - it applied 2021-estimated signs back to 2019-2021. Under honest
+    walk-forward, train+val is 0.80, below BH's 1.12 (2019 goes flat: too little
+    history to estimate signs yet). So the train+val "win" was partly an artifact;
+    the real, robust win is out-of-sample.
+The production strategy now uses WALK-FORWARD signs (mode='walkforward') - the
+deployment-correct design with no train-cut dependence.
+
 ## How the lead was built: factor mining (deterministic)
 
 Pivoting from "more models on the same features" to MINING NEW FACTORS found the

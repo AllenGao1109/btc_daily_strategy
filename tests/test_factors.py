@@ -5,7 +5,12 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from src.factors import build_factors, composite_signal, information_coefficient
+from src.factors import (
+    build_factors,
+    composite_signal,
+    composite_signal_walkforward,
+    information_coefficient,
+)
 from src.data import generate_synthetic_btc
 
 
@@ -37,6 +42,19 @@ def test_composite_signal_is_causal():
     a, b = s1.iloc[: cut + 1], s2.iloc[: cut + 1]
     mask = a.notna() & b.notna()
     assert np.allclose(a[mask], b[mask]), "composite signal leaked future info"
+
+
+def test_walkforward_composite_is_causal():
+    df1 = generate_synthetic_btc(n_days=1400, seed=4)
+    cut = 1100
+    facs = ["mom_120", "vol_regime", "zscore_60"]
+    s1 = composite_signal_walkforward(df1, facs)
+    df2 = df1.copy()
+    df2.iloc[cut + 1 :, df2.columns.get_loc("close")] *= 1.4
+    s2 = composite_signal_walkforward(df2, facs)
+    a, b = s1.iloc[: cut + 1], s2.iloc[: cut + 1]
+    mask = a.notna() & b.notna()
+    assert np.allclose(a[mask], b[mask]), "walk-forward composite leaked future info"
 
 
 def test_information_coefficient_range():

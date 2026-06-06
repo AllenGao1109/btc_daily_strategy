@@ -205,6 +205,68 @@ def composite_signal(
     return np.tanh(score).rename("composite")
 
 
+def composite_signal_walkforward(
+    df: pd.DataFrame,
+    factor_names: list[str],
+    horizon: int = 20,
+    min_periods: int = 365,
+    min_train_days: int = 730,
+) -> pd.Series:
+    """Walk-forward composite: re-estimate factor IC signs each year on past data.
+
+    Unlike :func:`composite_signal` (which fixes signs at a single ``train_end``),
+    this re-estimates each factor's IC sign/weight at the start of every calendar
+    year using ONLY data available up to ``year_start - horizon`` (so the forward
+    return used for IC never peeks past the cutoff). The expanding z-scores are
+    already causal. This is the deployment-correct design — it depends on no
+    arbitrary train cut and never uses future information — and it confirms the
+    out-of-sample edge is not an artifact of the train-cut choice.
+
+    Years with fewer than ``min_train_days`` of prior history are left flat (the
+    signs are not yet estimable), which is the honest behavior.
+
+    Args:
+        df: OHLCV(/on-chain/eth) frame.
+        factor_names: Factors to combine.
+        horizon: Forward-return horizon for IC sign estimation.
+        min_periods: Minimum history for a causal z-score.
+        min_train_days: Minimum prior history before a year is traded.
+
+    Returns:
+        Composite score Series aligned to ``df.index`` (NaN/flat during warmup).
+    """
+    factors = build_factors(df)
+    fr = forward_return(df, horizon)
+
+    z_by_factor: dict[str, pd.Series] = {}
+    for name in factor_names:
+        if name not in factors.columns:
+            continue
+        f = factors[name].replace([np.inf, -np.inf], np.nan)
+        mu = f.expanding(min_periods=min_periods).mean()
+        sd = f.expanding(min_periods=min_periods).std()
+        z_by_factor[name] = ((f - mu) / sd).clip(-3, 3)
+
+    score = pd.Series(0.0, index=df.index)
+    wsum = pd.Series(0.0, index=df.index)
+    for yr in sorted(set(df.index.year)):
+        ystart = pd.Timestamp(f"{yr}-01-01", tz="UTC")
+        cutoff = ystart - pd.Timedelta(days=horizon + 1)  # no lookahead into IC
+        train_mask = df.index <= cutoff
+        if int(train_mask.sum()) < min_train_days:
+            continue
+        ymask = (df.index >= ystart) & (df.index < pd.Timestamp(f"{yr + 1}-01-01", tz="UTC"))
+        for name, z in z_by_factor.items():
+            ic = information_coefficient(factors[name][train_mask], fr[train_mask])
+            if ic == 0.0:
+                continue
+            score.loc[ymask] += np.sign(ic) * abs(ic) * z.loc[ymask].fillna(0.0)
+            wsum.loc[ymask] += abs(ic)
+
+    score = score / wsum.replace(0.0, np.nan)
+    return np.tanh(score).rename("composite")
+
+
 def forward_return(df: pd.DataFrame, horizon: int = 1) -> pd.Series:
     """Forward ``horizon``-day return aligned to each day t (known at t+horizon)."""
     close = df["close"].astype(float)

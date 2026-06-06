@@ -50,19 +50,24 @@ validation:
   walk_forward: true
 
 strategy:
-  # factor_composite is the first strategy to beat buy-and-hold on BOTH Sharpe
-  # and NAV out-of-sample, robustly and deterministically, under disciplined
-  # (no-test-peek) selection. It combines factors whose information coefficient
-  # is stable across train+validation: BTC halving-cycle phase, return kurtosis,
-  # volatility regime, MVRV valuation, long-horizon momentum, exchange net-flow,
-  # and BTC-vs-ETH relative strength. Out-of-sample test (2024-2026):
-  #   factor_composite: Sharpe 0.98, NAV 2.00, MaxDD -26%
-  #   buy_and_hold:     Sharpe 0.58, NAV 1.50, MaxDD -50%
-  # Train+val years mean-yearly Sharpe 1.41 vs BH 1.12. ~84 trades. The edge is
-  # broad-based (4/8 win years) and strongest in bear years (downside protection).
+  # factor_composite beats buy-and-hold out-of-sample on BOTH Sharpe and NAV,
+  # deterministically and robustly. It combines factors whose IC is stable across
+  # train+validation: BTC halving-cycle phase, return kurtosis, volatility regime,
+  # MVRV valuation, long-horizon momentum, exchange net-flow, BTC-vs-ETH relative
+  # strength. Mode is WALK-FORWARD (factor signs re-estimated each year on past
+  # data only) - the deployment-correct design with no train-cut artifact.
+  # Out-of-sample test (2024-2026), confirmed under walk-forward:
+  #   factor_composite (WF): Sharpe 0.86, NAV 1.80, MaxDD -28%
+  #   buy_and_hold:          Sharpe 0.58, NAV 1.50, MaxDD -50%
+  # Every horizon x tilt neighborhood cell beats BH on test Sharpe AND NAV (no
+  # knife-edge). Edge is broad-based, strongest in bear years (downside protection),
+  # ~84 trades. HONEST CAVEAT: on the in-sample train+val years walk-forward is
+  # 0.80 mean-yearly (below BH 1.12 - early years lack history to estimate signs);
+  # the robust win is the out-of-sample window. Full-sample total return trails BH
+  # because vol-targeting gives up the 2017-2021 bull.
   name: "factor_composite"
   params:
-    train_end: "2021-12-31"   # factor signs use only data <= this (no lookahead)
+    mode: "walkforward"
     horizon: 20
     tilt: 0.5
     target_vol: 0.55
