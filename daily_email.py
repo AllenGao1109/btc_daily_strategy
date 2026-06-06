@@ -22,13 +22,20 @@ import smtplib
 import ssl
 import traceback
 from email.mime.application import MIMEApplication
+from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
 
 from src.config import load_config
 from src.data import load_btc_data
-from src.guidance import build_guidance, render_html, render_markdown, write_excel
+from src.guidance import (
+    build_guidance,
+    make_equity_chart,
+    render_html,
+    render_markdown,
+    write_excel,
+)
 
 CONFIG_FILE = Path(__file__).parent / "email_config.json"
 
@@ -89,15 +96,32 @@ def compose(config: dict):
     return subject, text_body, html_body, table, meta
 
 
-def _build_message(ecfg: dict, subject: str, text_body: str, html_body: str) -> MIMEMultipart:
-    """Assemble a multipart/alternative email (HTML with plain-text fallback)."""
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = ecfg["sender"]
-    msg["To"] = ecfg["recipient"]
-    msg.attach(MIMEText(text_body, "plain", "utf-8"))
-    msg.attach(MIMEText(html_body, "html", "utf-8"))
-    return msg
+def _build_message(ecfg: dict, subject: str, text_body: str, html_body: str,
+                   chart_path: str | None = None, xlsx_path: str | None = None) -> MIMEMultipart:
+    """Assemble the email: HTML+text, an inline equity chart, and an Excel attachment."""
+    root = MIMEMultipart("related")
+    root["Subject"] = subject
+    root["From"] = ecfg["sender"]
+    root["To"] = ecfg["recipient"]
+
+    alt = MIMEMultipart("alternative")
+    alt.attach(MIMEText(text_body, "plain", "utf-8"))
+    alt.attach(MIMEText(html_body, "html", "utf-8"))
+    root.attach(alt)
+
+    if chart_path:
+        with open(chart_path, "rb") as fh:
+            img = MIMEImage(fh.read())
+        img.add_header("Content-ID", "<equitychart>")
+        img.add_header("Content-Disposition", "inline", filename="equity.png")
+        root.attach(img)
+
+    if xlsx_path:
+        with open(xlsx_path, "rb") as fh:
+            att = MIMEApplication(fh.read(), _subtype="xlsx")
+        att.add_header("Content-Disposition", "attachment", filename=Path(xlsx_path).name)
+        root.attach(att)
+    return root
 
 
 def send_email(ecfg: dict, msg: MIMEMultipart) -> None:
@@ -123,11 +147,12 @@ def main():
         except Exception as exc:
             print(f"[warn] data refresh failed, using cache: {exc}")
 
-    xlsx_path = None
+    xlsx_path = chart_path = None
     try:
         subject, text_body, html_body, table, meta = compose(config)
         Path("logs").mkdir(exist_ok=True)
         xlsx_path = write_excel(f"logs/btc_guidance_{meta['as_of']}.xlsx", table, meta)
+        chart_path = make_equity_chart(meta, f"logs/btc_equity_{meta['as_of']}.png")
     except Exception:
         subject = "[BTC Strategy] ERROR generating guidance"
         text_body = "The daily guidance job failed:\n\n" + traceback.format_exc()
@@ -141,19 +166,17 @@ def main():
         Path("logs").mkdir(exist_ok=True)
         Path("logs/email_preview.html").write_text(html_body)
         print("HTML preview saved -> logs/email_preview.html")
+        if chart_path:
+            print(f"Equity chart saved -> {chart_path}")
         if xlsx_path:
             print(f"Excel saved -> {xlsx_path}")
         return
 
     ecfg = load_email_config()
-    msg = _build_message(ecfg, subject, text_body, html_body)
-    if xlsx_path:
-        with open(xlsx_path, "rb") as fh:
-            att = MIMEApplication(fh.read(), _subtype="xlsx")
-        att.add_header("Content-Disposition", "attachment", filename=Path(xlsx_path).name)
-        msg.attach(att)
+    msg = _build_message(ecfg, subject, text_body, html_body, chart_path, xlsx_path)
     send_email(ecfg, msg)
-    print(f"Sent: {subject}" + (f" (+Excel {Path(xlsx_path).name})" if xlsx_path else ""))
+    extras = [x for x in (chart_path and "chart", xlsx_path and "Excel") if x]
+    print(f"Sent: {subject}" + (f" (+{', '.join(extras)})" if extras else ""))
 
 
 if __name__ == "__main__":

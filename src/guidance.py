@@ -250,12 +250,25 @@ def build_guidance(config: dict, bands: list[float] | None = None) -> tuple[pd.D
         ctx = market_context(df)
         perf = strategy_perf(primary_res) if primary_res is not None else {}
         primary_row = min(rows, key=lambda r: abs(r["band"] - primary_band))
+        # Equity vs buy-and-hold for the chart (recent window).
+        equity = {}
+        if primary_res is not None:
+            bh_res = run_full(df, get_strategy("buy_and_hold")(df, {}), bt)
+            n = min(420, len(primary_res))
+            sub_s = primary_res["equity_end"].iloc[-n:]
+            sub_b = bh_res["equity_end"].reindex(sub_s.index)
+            equity = {
+                "dates": [d.date().isoformat() for d in sub_s.index],
+                "strategy": [round(float(x), 2) for x in sub_s.values],
+                "bh": [round(float(x), 2) for x in sub_b.values],
+            }
         meta["insight"] = {
             "summary": make_summary(meta, primary_row, breakdown, ctx, perf),
             "summary_zh": make_summary_zh(meta, primary_row, breakdown, ctx, perf),
             "breakdown": breakdown, "context": ctx, "perf": perf,
             "primary_band": primary_band,
             "decisions": recent_decisions(primary_res, 15) if primary_res is not None else [],
+            "equity": equity,
         }
     except Exception as exc:  # pragma: no cover - never block the core table
         meta["insight"] = {"summary": f"(insight unavailable: {exc})"}
@@ -314,6 +327,50 @@ def render_markdown(table: pd.DataFrame, meta: dict) -> str:
                   f"YTD {p.get('ytd', float('nan')):+.1f}% / current drawdown {p.get('current_drawdown', float('nan')):+.1f}%"]
     lines += ["", "Research output only — act manually."]
     return "\n".join(lines)
+
+
+def make_equity_chart(meta: dict, path: str) -> str | None:
+    """Render a recent equity-curve PNG: strategy (your band) vs buy-and-hold.
+
+    Both normalized to 1.0 at the start of the window. Returns the path, or None
+    if no equity data is available.
+    """
+    eq = meta.get("insight", {}).get("equity") or {}
+    if not eq.get("dates"):
+        return None
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib import font_manager
+
+    # Use a CJK-capable font so Chinese labels render (fall back gracefully).
+    cjk = [f for f in ["Arial Unicode MS", "PingFang SC", "Heiti SC", "STHeiti",
+                       "Songti SC", "Hiragino Sans GB"]
+           if any(font.name == f for font in font_manager.fontManager.ttflist)]
+    if cjk:
+        plt.rcParams["font.sans-serif"] = cjk + ["sans-serif"]
+    plt.rcParams["axes.unicode_minus"] = False
+
+    dates = pd.to_datetime(eq["dates"])
+    s = np.asarray(eq["strategy"], dtype=float)
+    b = np.asarray(eq["bh"], dtype=float)
+    s = s / s[0]
+    b = b / b[0]
+    band = meta.get("insight", {}).get("primary_band", 0.20)
+    fig, ax = plt.subplots(figsize=(7.2, 3.1))
+    ax.plot(dates, s, color="#2d6cdf", lw=2.0, label=f"策略 Strategy (band {band:.2f})")
+    ax.plot(dates, b, color="#999", lw=1.5, label="买入持有 Buy & Hold")
+    ax.axhline(1.0, color="#ccc", lw=0.8, ls="--")
+    ax.set_title(f"近 {len(dates)} 天净值 vs 买入持有 / Recent equity vs B&H (=1 at start)",
+                 fontsize=10)
+    ax.legend(fontsize=9, loc="best")
+    ax.grid(alpha=0.25)
+    ax.margins(x=0.01)
+    fig.autofmt_xdate(rotation=0)
+    fig.tight_layout()
+    fig.savefig(path, dpi=120)
+    plt.close(fig)
+    return path
 
 
 def write_excel(path: str, table: pd.DataFrame, meta: dict) -> str:
@@ -477,7 +534,10 @@ def render_html(table: pd.DataFrame, meta: dict, primary_band: float | None = No
         f"BTC 收盘 <b>${meta['btc_close']:,.0f}</b> · "
         f"信号目标仓位 signal target <b>{meta['signal_target']:.2f}x</b></p>"
         f"{summary_box}"
-        f"<h3 style='margin:16px 0 4px'>分带宽决策指引 / Decision guidance by band</h3>"
+        + (f"<h3 style='margin:16px 0 4px'>近期净值 vs 买入持有 / Recent equity vs B&H</h3>"
+           f"<img src='cid:equitychart' style='max-width:100%;border:1px solid #eee;border-radius:4px'/>"
+           if ins.get("equity") else "")
+        + f"<h3 style='margin:16px 0 4px'>分带宽决策指引 / Decision guidance by band</h3>"
         f"<table style='border-collapse:collapse'>"
         f"<thead><tr>{head}</tr></thead><tbody>{''.join(body_rows)}</tbody></table>"
         f"<p style='color:#888;font-size:12px;margin:4px 0 0'>高亮行=你当前的档位 / your band。"
