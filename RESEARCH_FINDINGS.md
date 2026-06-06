@@ -142,6 +142,42 @@ tilt=0.0 (full symmetric short) OVER-shorts the recoveries and drops validation 
 tilt=0.5+short barely protects (-61%). tilt=0.25 is the balance. allow_short=false keeps
 the long/flat profile (sits out bears). Now the config default.
 
+## Leverage study: why NOT to go above ~2x (even at high conviction)
+
+Thought experiment: allow up to 10x. Findings (research; production stays at 2x):
+- With vol-targeting at the default risk budget, raising the cap 2x->10x changes almost
+  NOTHING: peak realized leverage stays ~2.4x and full-sample NAV ~29->33. The strategy
+  is risk-budgeted - it does not WANT high leverage. "Having 10x" is irrelevant.
+- To actually use it you must raise target_vol (be more aggressive): NAV looks huge in
+  sample (target_vol 1.5 -> NAV 489) but at -85% drawdown and 7x peak leverage, and the
+  TEST NAV gets WORSE (conf_gain 1->8: test NAV 2.12 -> 0.77). It overfits the in-sample
+  bull and loses out-of-sample.
+- target_vol >= 3 LIQUIDATES on 2020-03-12 (COVID -38% day). 10x = ruin on any crash.
+- The decisive empirical point on "but bet big when very confident": across the top-10%
+  most-bullish-conviction days, 16% are followed by a >-10% drawdown within 10 days
+  (worst single day -38%, worst 10d drawdown -51%). At 10x a -10% move is liquidation, so
+  ~1 in 6 max-conviction bets would wipe out the account. Risk of ruin dominates; Kelly
+  itself prescribes a small fraction against a 16%-chance-of-total-loss bet.
+Conclusion: ~2-2.4x via vol-targeting (what we do) is near the math-optimal ceiling under
+BTC's tail risk + 0.5% fees. The intraday-liquidation caveat makes any high-lev backtest
+NAV dangerously optimistic.
+
+## Regime / data-relevance study: keep ALL history (don't trim early data)
+
+Hypothesis tested: "BTC matured since ~2015, vol fell, so early data is noise - trim it."
+- Vol HAS fallen: annualized realized vol ~80-95% (2017-2021) -> ~42-53% (2023-2026). True.
+- BUT trimming early data HURTS out-of-sample: test Sharpe/NAV by data start -
+  2017(all) 1.03/2.16, 2019 0.79/1.68, 2020 0.73/1.64, 2021 0.71/1.67 (val collapses to
+  0.00 - too little warmup). Less data = more overfitting + loss of crash memory (2022/2026
+  bears rhyme with 2018).
+- The vol decline is ALREADY handled by the mechanism: vol-targeting (0.55/realized_vol)
+  auto-scales position UP as vol falls, and expanding z-scores re-center - so we capture the
+  low-vol regime WITHOUT discarding old data.
+- Tail risk did NOT vanish: 2024 had a -8.4% day, 2026 a -14% day. "Matured / lower vol"
+  does not mean "safe for high leverage."
+Conclusion: full history + vol-targeting is optimal - old data gives robustness and crash
+memory; the adaptive sizing captures the new low-vol regime. Do not trim.
+
 ## What works
 
 - **Volatility targeting + diversified trend ensemble** — lower drawdown
