@@ -102,6 +102,17 @@ train+val bar without test-peeking.
 
 ## What does NOT work (tested, documented, not hidden)
 
+- **Unattended factor search saturation** (factor_search.py): forward selection over
+  75 candidates (36 IC-robust) found ZERO additions that improve the walk-forward
+  validation metric (1.271) while keeping all neighborhood cells beating BH. The
+  9-factor set is a disciplined local optimum - recombining existing price/on-chain/
+  cross-crypto factors is exhausted; more brute-force search would only manufacture
+  multiple-testing false positives.
+- **OKX funding rate** (positioning factor): the obvious new signal, but OKX's public
+  funding-rate-history endpoint returns only ~90 days - no overlap with the train/val
+  windows, so it cannot be backtested. Loader kept for live use; not in the composite.
+  Real further edge needs NEW HISTORICAL data (paid on-chain, order-book, sentiment).
+
 - **Standalone next-day ML** (500 experiments): mean OOS test Sharpe -0.28;
   top-validation configs were test-negative (val 1.29 -> test -0.34). Of 36
   configs that beat buy-and-hold on test, zero had validation Sharpe > 0.7, so

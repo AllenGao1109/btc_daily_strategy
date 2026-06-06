@@ -103,6 +103,54 @@ def _slice_dates(
     return df
 
 
+def load_okx_funding(index: pd.DatetimeIndex) -> pd.Series:
+    """Load daily-aggregated BTC perpetual funding rate from OKX (positioning).
+
+    Funding is paid every 8h; this aggregates to a daily mean. High positive
+    funding = crowded longs (typically bearish for forward returns). Paginates
+    backward via the ``after`` cursor.
+
+    LIMITATION: OKX's public funding-rate-history endpoint only returns ~90 days,
+    so this is usable for LIVE/recent monitoring but NOT for the 2017-2026 backtest
+    (no overlap with the train/val windows). Kept for completeness; the research
+    composite does not use funding (see RESEARCH_FINDINGS.md). Causal regardless.
+
+    Args:
+        index: BTC DatetimeIndex to align to.
+
+    Returns:
+        Series named ``funding`` indexed like ``index`` (NaN where unavailable).
+    """
+    import json
+    import urllib.request
+
+    url = "https://www.okx.com/api/v5/public/funding-rate-history?instId=BTC-USD-SWAP&limit=100"
+    rows: list[tuple[int, float]] = []
+    cursor: str | None = None
+    for _ in range(400):  # backstop; ~3/day since 2020 => a few hundred pages
+        u = url + (f"&after={cursor}" if cursor else "")
+        try:
+            req = urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
+                payload = json.loads(resp.read().decode("utf-8"))
+        except Exception:  # pragma: no cover - network
+            break
+        data = payload.get("data", [])
+        if not data:
+            break
+        for d in data:
+            rows.append((int(d["fundingTime"]), float(d["fundingRate"])))
+        cursor = str(min(int(d["fundingTime"]) for d in data))
+        if len(data) < 100:
+            break
+
+    if not rows:
+        return pd.Series(np.nan, index=index, name="funding")
+    s = pd.Series({pd.Timestamp(t, unit="ms", tz="UTC"): r for t, r in rows})
+    daily = s.groupby(s.index.normalize()).mean()
+    return daily.reindex(index).rename("funding")
+
+
 def load_eth_close(index: pd.DatetimeIndex, start_date: str = "2016-01-01") -> pd.Series:
     """Load ETH daily close aligned to ``index`` (for cross-crypto factors).
 

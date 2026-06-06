@@ -128,6 +128,11 @@ def build_factors(df: pd.DataFrame) -> pd.DataFrame:
         out["btc_eth_rs_30"] = close.pct_change(30) - eth.pct_change(30)
         out["btc_dominance_mom"] = (close / eth).pct_change(30)
 
+    # NOTE: perp funding-rate factors were evaluated but OKX's public funding
+    # history only returns ~90 days, so they cannot be backtested over 2017-2026
+    # (insufficient overlap with the train/val windows). The loader is kept for
+    # live use; no funding factor is included here. See RESEARCH_FINDINGS.md.
+
     # --- on-chain (only if the columns are present) ---
     if "CapMVRVCur" in df.columns:
         mvrv = df["CapMVRVCur"].astype(float)
