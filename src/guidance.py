@@ -32,7 +32,7 @@ from .strategies import get_strategy
 from .strategies.factor_composite import DEFAULT_FACTORS
 from .validation import make_fixed_split
 
-DEFAULT_BANDS = [0.20, 0.30, 0.40, 0.50, 0.60]
+DEFAULT_BANDS = [0.05, 0.10, 0.15, 0.20, 0.30, 0.40, 0.50, 0.60]
 
 
 def _load_enriched(config: dict) -> pd.DataFrame:
@@ -126,6 +126,31 @@ def strategy_perf(res: pd.DataFrame) -> dict:
     dd = (eq / eq.cummax() - 1).iloc[-1] * 100
     return {"ret_30d": ret(30), "ret_90d": ret(90), "ytd": round(float(ytd), 1),
             "current_drawdown": round(float(dd), 1)}
+
+
+def recent_decisions(res: pd.DataFrame, n: int = 15) -> list[dict]:
+    """Extract the last ``n`` actual trades (rebalances) from a backtest result.
+
+    Each decision = a day where turnover > 0: the position moved from
+    ``actual_weight_before_rebalance`` to ``target_weight``.
+    """
+    traded = res[res["turnover"] > 1e-9].tail(n)
+    out = []
+    for dt, r in traded.iterrows():
+        frm, to = float(r["actual_weight_before_rebalance"]), float(r["target_weight"])
+        direction = ("做空 Short" if to < -0.05 else "做多 Long" if to > 0.05 else "空仓 Flat")
+        out.append({
+            "date": dt.date().isoformat(),
+            "btc_close": round(float(r["close"]), 0),
+            "from_weight": round(frm, 2),
+            "to_weight": round(to, 2),
+            "change": round(to - frm, 2),
+            "direction": direction,
+            "turnover": round(float(r["turnover"]), 2),
+            "fee_paid": round(float(r["fee"]), 2),
+            "equity": round(float(r["equity_end"]), 0),
+        })
+    return out
 
 
 def make_summary(meta: dict, row: dict, breakdown: list[dict], ctx: dict, perf: dict) -> str:
@@ -230,6 +255,7 @@ def build_guidance(config: dict, bands: list[float] | None = None) -> tuple[pd.D
             "summary_zh": make_summary_zh(meta, primary_row, breakdown, ctx, perf),
             "breakdown": breakdown, "context": ctx, "perf": perf,
             "primary_band": primary_band,
+            "decisions": recent_decisions(primary_res, 15) if primary_res is not None else [],
         }
     except Exception as exc:  # pragma: no cover - never block the core table
         meta["insight"] = {"summary": f"(insight unavailable: {exc})"}
@@ -290,6 +316,57 @@ def render_markdown(table: pd.DataFrame, meta: dict) -> str:
     return "\n".join(lines)
 
 
+def write_excel(path: str, table: pd.DataFrame, meta: dict) -> str:
+    """Write an .xlsx with three sheets: Summary, Band guidance, Recent decisions.
+
+    Args:
+        path: Output .xlsx path.
+        table: The multi-band guidance table.
+        meta: Guidance meta (with insight).
+
+    Returns:
+        The written path.
+    """
+    ins = meta.get("insight", {})
+    with pd.ExcelWriter(path, engine="openpyxl") as xl:
+        # Sheet 1: summary / header
+        summ = pd.DataFrame({
+            "项 Item": ["截至 As of", "BTC 收盘 Close", "信号目标 Signal target",
+                        "摘要 Summary (中文)", "Summary (EN)"],
+            "值 Value": [meta["as_of"], meta["btc_close"], meta["signal_target"],
+                         ins.get("summary_zh", ""), ins.get("summary", "")],
+        })
+        summ.to_excel(xl, sheet_name="摘要 Summary", index=False)
+
+        # Sheet 2: multi-band guidance
+        gt = table.rename(columns={
+            "band": "带宽 Band", "trades_per_yr": "交易/年 Trades/yr",
+            "test_sharpe": "测试 Sharpe", "test_nav": "测试 NAV", "test_maxdd": "测试回撤% DD",
+            "full_sharpe": "全样本 Sharpe", "full_maxdd": "全样本回撤% DD",
+            "now_holding": "当前持仓 Holding", "days_since_trade": "距上次交易 Days",
+            "action_now": "现有动作 Action",
+        })
+        gt.to_excel(xl, sheet_name="分带宽指引 Bands", index=False)
+
+        # Sheet 3: recent decisions
+        dec = pd.DataFrame(ins.get("decisions", []))
+        if not dec.empty:
+            dec = dec.rename(columns={
+                "date": "日期 Date", "btc_close": "BTC收盘 Close",
+                "from_weight": "原仓位 From", "to_weight": "新仓位 To",
+                "change": "变化 Change", "direction": "方向 Direction",
+                "turnover": "换手 Turnover", "fee_paid": "手续费 Fee", "equity": "权益 Equity",
+            })
+        dec.to_excel(xl, sheet_name="最近决策 Decisions", index=False)
+
+        # Auto-fit column widths.
+        for ws in xl.book.worksheets:
+            for col in ws.columns:
+                width = max((len(str(c.value)) for c in col if c.value is not None), default=10)
+                ws.column_dimensions[col[0].column_letter].width = min(max(width + 2, 10), 60)
+    return path
+
+
 def render_html(table: pd.DataFrame, meta: dict, primary_band: float | None = None) -> str:
     """Render the guidance as an HTML email: one row per band, requested columns.
 
@@ -334,6 +411,28 @@ def render_html(table: pd.DataFrame, meta: dict, primary_band: float | None = No
         )
 
     extra = ""
+    if ins.get("decisions"):
+        drows = []
+        for d in reversed(ins["decisions"]):  # most recent first
+            dcolor = ("#c0392b" if d["to_weight"] < -0.05 else
+                      "#1a7f37" if d["to_weight"] > 0.05 else "#888")
+            drows.append(
+                f"<tr><td style='{td}'>{d['date']}</td>"
+                f"<td style='{td}'>${d['btc_close']:,.0f}</td>"
+                f"<td style='{td}'>{d['from_weight']:+.2f}x → "
+                f"<b style='color:{dcolor}'>{d['to_weight']:+.2f}x</b></td>"
+                f"<td style='{td};color:{dcolor}'>{d['direction']}</td>"
+                f"<td style='{td}'>{d['turnover']:.2f}</td></tr>"
+            )
+        extra += (
+            f"<h3 style='margin:16px 0 4px'>最近几次决策 / Recent decisions "
+            f"(band {ins.get('primary_band', 0.4):.2f})</h3>"
+            f"<table style='border-collapse:collapse'><thead><tr>"
+            f"<th style='{th}'>日期 Date</th><th style='{th}'>BTC</th>"
+            f"<th style='{th}'>仓位变化 Change</th><th style='{th}'>方向 Dir</th>"
+            f"<th style='{th}'>换手 Turnover</th></tr></thead>"
+            f"<tbody>{''.join(drows)}</tbody></table>"
+        )
     if ins.get("breakdown"):
         chips = []
         for b in ins["breakdown"]:

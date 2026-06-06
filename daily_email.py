@@ -21,13 +21,14 @@ import os
 import smtplib
 import ssl
 import traceback
+from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
 
 from src.config import load_config
 from src.data import load_btc_data
-from src.guidance import build_guidance, render_html, render_markdown
+from src.guidance import build_guidance, render_html, render_markdown, write_excel
 
 CONFIG_FILE = Path(__file__).parent / "email_config.json"
 
@@ -55,8 +56,8 @@ def load_email_config() -> dict:
     return cfg
 
 
-def compose(config: dict) -> tuple[str, str, str]:
-    """Build (subject, text_body, html_body) from the latest guidance."""
+def compose(config: dict):
+    """Build (subject, text_body, html_body, table, meta) from the latest guidance."""
     table, meta = build_guidance(config)
     primary_band = float(config["backtest"].get("weight_band", 0.40))
     row = min(table.to_dict("records"), key=lambda r: abs(r["band"] - primary_band))
@@ -85,7 +86,7 @@ def compose(config: dict) -> tuple[str, str, str]:
         render_markdown(table, meta),
     ])
     html_body = render_html(table, meta, primary_band=row["band"])
-    return subject, text_body, html_body
+    return subject, text_body, html_body, table, meta
 
 
 def _build_message(ecfg: dict, subject: str, text_body: str, html_body: str) -> MIMEMultipart:
@@ -122,8 +123,11 @@ def main():
         except Exception as exc:
             print(f"[warn] data refresh failed, using cache: {exc}")
 
+    xlsx_path = None
     try:
-        subject, text_body, html_body = compose(config)
+        subject, text_body, html_body, table, meta = compose(config)
+        Path("logs").mkdir(exist_ok=True)
+        xlsx_path = write_excel(f"logs/btc_guidance_{meta['as_of']}.xlsx", table, meta)
     except Exception:
         subject = "[BTC Strategy] ERROR generating guidance"
         text_body = "The daily guidance job failed:\n\n" + traceback.format_exc()
@@ -133,16 +137,23 @@ def main():
         print("SUBJECT:", subject)
         print("-" * 60)
         print(text_body)
-        print("-" * 60, "\n[HTML body generated:", len(html_body), "chars]")
+        print("-" * 60, "\n[HTML body:", len(html_body), "chars]")
         Path("logs").mkdir(exist_ok=True)
         Path("logs/email_preview.html").write_text(html_body)
         print("HTML preview saved -> logs/email_preview.html")
+        if xlsx_path:
+            print(f"Excel saved -> {xlsx_path}")
         return
 
     ecfg = load_email_config()
     msg = _build_message(ecfg, subject, text_body, html_body)
+    if xlsx_path:
+        with open(xlsx_path, "rb") as fh:
+            att = MIMEApplication(fh.read(), _subtype="xlsx")
+        att.add_header("Content-Disposition", "attachment", filename=Path(xlsx_path).name)
+        msg.attach(att)
     send_email(ecfg, msg)
-    print(f"Sent: {subject}")
+    print(f"Sent: {subject}" + (f" (+Excel {Path(xlsx_path).name})" if xlsx_path else ""))
 
 
 if __name__ == "__main__":
