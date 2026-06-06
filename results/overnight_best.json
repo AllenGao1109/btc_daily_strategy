@@ -1,20 +1,16 @@
 {
   "set": [
-    "halving_cos",
-    "kurt_30",
     "vol_regime",
-    "mvrv_z_365",
-    "mom_120",
-    "mvrv_mom_30",
-    "ex_netflow_to_mcap",
-    "btc_eth_rs_30",
-    "rvol_z90",
-    "sharpe_mom_120",
+    "range_pos_252",
     "alts_above_50dma",
-    "btc_vs_alts_30"
+    "amihud_20",
+    "mvrv_mom_30",
+    "btc_vs_alts_60",
+    "btc_dominance_mom",
+    "halving_cos"
   ],
-  "fold_mean": 1.4827422367626801,
-  "fold_min": -0.05086588789051211,
-  "test_sh": 0.8619225153971647,
-  "test_nav": 2.047709404738937
+  "fold_mean": 1.799428579562461,
+  "fold_min": 0.903145218701799,
+  "test_sh": 0.9763218039880239,
+  "test_nav": 2.469291704607259
 }

@@ -106,6 +106,27 @@ exactly the NAV/Sharpe trade the owner asked for. gain>1.5 degrades (drawdown bl
 out). Set confidence_gain=0.0 for the lower-drawdown Sharpe-first profile. Now the
 config default (NAV preset).
 
+## Overnight 8h autonomous search (220k evals) - no clean improvement; overfit caught
+
+Ran overnight_research.py for 8h (220,832 evaluations) over 83 candidates incl. NEW
+market-breadth factors from 12 altcoins, selecting on a 4-fold (2020-2023) walk-forward
+metric with the test window held out.
+- Forward selection (low multiple-testing, trustworthy) added sharpe_mom_120 +
+  alts_above_50dma + btc_vs_alts_30, improving the worst FOLD (-0.73 -> -0.05). But on
+  hand-validation it is NOT a clean win: the deployed point (h20/t0.5) test drops
+  0.94/2.30 -> 0.86/2.05 and 2026 worsens. A lateral move, not an improvement.
+- The random search's "best" (fold_mean 1.799, test 0.98/2.47) is a MULTIPLE-TESTING
+  ARTIFACT: selected from 220k tries, it dropped all core factors and its worst YEAR is
+  -1.24 (vs current -0.73) - shinier aggregate numbers, worse tail robustness. Adopting it
+  on the test number alone would have made the strategy WORSE. The year-by-year + worst-
+  cell discipline caught it. (Another logged RND "best" had fold_mean 1.67 but test
+  0.40/1.21 - direct proof the fold metric was gamed.)
+- Market-breadth factors are real signal (robust IC) but largely REDUNDANT with the
+  existing factors for the deployed config.
+Conclusion: the current 9-factor composite (conf_gain=1.0, test 0.94/2.30) survives a
+220k-eval search over new free data - strong evidence it is robust. No production change.
+The episode is a clean case study in why disciplined multi-fold + tail checks matter.
+
 ## What works
 
 - **Volatility targeting + diversified trend ensemble** — lower drawdown
