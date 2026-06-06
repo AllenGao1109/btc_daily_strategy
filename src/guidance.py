@@ -254,7 +254,7 @@ def build_guidance(config: dict, bands: list[float] | None = None) -> tuple[pd.D
         equity = {}
         if primary_res is not None:
             bh_res = run_full(df, get_strategy("buy_and_hold")(df, {}), bt)
-            n = min(420, len(primary_res))
+            n = min(730, len(primary_res))  # ~2 years
             sub_s = primary_res["equity_end"].iloc[-n:]
             sub_b = bh_res["equity_end"].reindex(sub_s.index)
             equity = {
@@ -341,28 +341,20 @@ def make_equity_chart(meta: dict, path: str) -> str | None:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from matplotlib import font_manager
 
-    # Use a CJK-capable font so Chinese labels render (fall back gracefully).
-    cjk = [f for f in ["Arial Unicode MS", "PingFang SC", "Heiti SC", "STHeiti",
-                       "Songti SC", "Hiragino Sans GB"]
-           if any(font.name == f for font in font_manager.fontManager.ttflist)]
-    if cjk:
-        plt.rcParams["font.sans-serif"] = cjk + ["sans-serif"]
     plt.rcParams["axes.unicode_minus"] = False
-
     dates = pd.to_datetime(eq["dates"])
     s = np.asarray(eq["strategy"], dtype=float)
     b = np.asarray(eq["bh"], dtype=float)
     s = s / s[0]
     b = b / b[0]
     band = meta.get("insight", {}).get("primary_band", 0.20)
+    yrs = len(dates) / 365.0
     fig, ax = plt.subplots(figsize=(7.2, 3.1))
-    ax.plot(dates, s, color="#2d6cdf", lw=2.0, label=f"策略 Strategy (band {band:.2f})")
-    ax.plot(dates, b, color="#999", lw=1.5, label="买入持有 Buy & Hold")
+    ax.plot(dates, s, color="#2d6cdf", lw=2.0, label=f"Strategy (band {band:.2f})")
+    ax.plot(dates, b, color="#999", lw=1.5, label="Buy & Hold")
     ax.axhline(1.0, color="#ccc", lw=0.8, ls="--")
-    ax.set_title(f"近 {len(dates)} 天净值 vs 买入持有 / Recent equity vs B&H (=1 at start)",
-                 fontsize=10)
+    ax.set_title(f"Equity vs Buy & Hold — last ~{yrs:.1f}y (=1 at start)", fontsize=10)
     ax.legend(fontsize=9, loc="best")
     ax.grid(alpha=0.25)
     ax.margins(x=0.01)
