@@ -102,6 +102,19 @@ def run_all(
         raw_df = data_mod.load_btc_data(config, force_reload=force_reload)
     feat_df = features_mod.build_features(raw_df)
 
+    # Enrich with on-chain + cross-asset columns for factor strategies. Best-effort:
+    # if the data sources are unreachable, factor strategies simply use the subset
+    # of factors that are computable from OHLCV alone.
+    if not use_synthetic and config.get("data", {}).get("enrich", True):
+        try:
+            from . import onchain as onchain_mod
+            feat_df = onchain_mod.merge_onchain(
+                feat_df, onchain_mod.load_coinmetrics(onchain_mod.ONCHAIN_METRICS)
+            )
+            feat_df["eth_close"] = data_mod.load_eth_close(feat_df.index)
+        except Exception as exc:  # noqa: BLE001 - enrichment is optional
+            print(f"[warn] on-chain/cross-asset enrichment skipped: {exc}")
+
     strategies_to_run = list(dict.fromkeys([*BENCHMARKS, primary]))
     results: dict[str, pd.DataFrame] = {}
     metrics: dict[str, dict[str, Any]] = {}

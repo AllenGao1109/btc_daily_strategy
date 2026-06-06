@@ -116,6 +116,12 @@ def build_factors(df: pd.DataFrame) -> pd.DataFrame:
     obv = (np.sign(ret).fillna(0.0) * vol).cumsum()
     out["obv_slope_20"] = obv.diff(20)
 
+    # --- cross-crypto (only if an ETH reference column is present) ---
+    if "eth_close" in df.columns:
+        eth = df["eth_close"].astype(float)
+        out["btc_eth_rs_30"] = close.pct_change(30) - eth.pct_change(30)
+        out["btc_dominance_mom"] = (close / eth).pct_change(30)
+
     # --- on-chain (only if the columns are present) ---
     if "CapMVRVCur" in df.columns:
         mvrv = df["CapMVRVCur"].astype(float)

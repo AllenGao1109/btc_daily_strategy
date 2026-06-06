@@ -103,6 +103,23 @@ def _slice_dates(
     return df
 
 
+def load_eth_close(index: pd.DatetimeIndex, start_date: str = "2016-01-01") -> pd.Series:
+    """Load ETH daily close aligned to ``index`` (for cross-crypto factors).
+
+    Uses the same keyless CryptoCompare source as BTC. Forward-filled onto the BTC
+    calendar; introduces no lookahead (only past ETH closes are used downstream).
+
+    Args:
+        index: BTC DatetimeIndex to align to.
+        start_date: Earliest ETH date to fetch.
+
+    Returns:
+        Series named ``eth_close`` indexed like ``index``.
+    """
+    eth = _download_cryptocompare("ETH/USD", start_date)["close"]
+    return eth.reindex(index).ffill().rename("eth_close")
+
+
 def _download_cryptocompare(
     symbol: str, start_date: str | None, *, page_limit: int = 2000
 ) -> pd.DataFrame:
