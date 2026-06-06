@@ -20,3 +20,6 @@ results/*.csv
 
 # OS
 .DS_Store
+
+# Local email credentials (never commit)
+email_config.json
