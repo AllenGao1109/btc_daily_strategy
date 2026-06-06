@@ -245,6 +245,24 @@ Conclusion: with a 0.5% per-trade fee, higher frequency adds no tradeable alpha 
 the fee forces low turnover, and at low turnover intraday data carries no signal
 beyond what daily already captures. Hourly loader kept as infrastructure.
 
+## Quant-literature orthogonal factors - IC-robust but redundant (composite saturated)
+
+Mined canonical style/quant factors specifically chosen to be ORTHOGONAL to the existing
+set (which is cycle/value/momentum/vol):
+- Kaufman Efficiency Ratio (trend QUALITY, not magnitude): IC-robust (h20 train ~0.15,
+  val ~0.08) but adding it LOWERS validation Sharpe (1.65 -> ~1.50). Rejected.
+- Frog-in-the-Pan / information discreteness (Da-Gurun-Warachka; smooth vs jumpy momentum):
+  strong standalone IC (val -0.22) but adding it degrades the worst test cell (1.07/2.18 ->
+  0.97/1.92) - directionally redundant with momentum. Rejected.
+- Realized skewness (daily and intraday-from-hourly, Amaya et al.): mostly not IC-robust.
+- Carry (funding/basis - the canonical missing crypto factor): UNAVAILABLE. OKX gives only
+  ~90 days; Binance and Bybit are geo-blocked (CloudFront/eligibility). No free long history.
+Meta-conclusion: even canonical literature factors do not improve the 10-factor composite.
+Combined with the macro/sentiment/breadth/stablecoin/220k-search results, the robustly
+predictable DIRECTIONAL signal in free daily BTC data appears finite and largely captured.
+This is evidence the composite is SATURATED and ROBUST (hard to dislodge), not fragile.
+Adding factors now mostly yields "directionally redundant" or "lowers validation".
+
 ## What does NOT work (tested, documented, not hidden)
 
 - **Unattended factor search saturation** (factor_search.py): forward selection over
