@@ -137,6 +137,23 @@ the next week" (triple-barrier labeling: does price hit +X% before -X% within H=
   upside. (Side note: the long-only confidence-gated HOLD reaches NAV 2.24 > composite
   1.82 but at lower Sharpe 0.65 - a NAV/Sharpe trade, not a clean win.)
 
+## Support/resistance (market psychology) - tested, does NOT help (BTC trends through levels)
+
+Tested S/R / price-level-memory factors (the owner's "look at more than today's data"):
+volume-profile point-of-control distance, position in a long high-low range, distance
+to recent resistance/support, round-number proximity.
+- The genuinely PSYCHOLOGICAL "reversal" factors are NOT robust: support-bounce
+  (dist_support_90 val IC flips -0.04), volume-profile POC (val ~0.01), round numbers
+  (sign flips train->val). BTC does not reverse at these levels.
+- The only robust S/R factors (range_pos_252, dist_resist_90) have POSITIVE IC
+  (closer to resistance => higher forward return) = breakout/momentum CONTINUATION,
+  the opposite of fade-the-level psychology. They correlate 0.4-0.66 with existing
+  momentum/trend factors (redundant) and adding them makes the composite WORSE
+  (val Sharpe 1.24->1.21->1.12; test 2.07->1.89-1.96 NAV).
+Conclusion: BTC is a trending asset that breaks THROUGH support/resistance rather than
+bouncing off it; the directional structure is already captured by the momentum/cycle/
+RS factors. S/R reversal psychology does not translate to a daily edge here.
+
 ## Higher frequency (hourly) - explored, does NOT help under 0.5% fees
 
 Built an hourly BTC pipeline (load_btc_hourly: 65k bars 2019-2026, cached) and

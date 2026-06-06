@@ -88,6 +88,17 @@ def build_factors(df: pd.DataFrame) -> pd.DataFrame:
     out["ma_dist_fast_slow"] = close.rolling(20).mean() / close.rolling(100).mean() - 1.0
     out["price_accel"] = close.pct_change(20) - close.pct_change(20).shift(20)
 
+    # --- support/resistance (price-level structure / market memory) ---
+    # Tested thoroughly (see RESEARCH_FINDINGS.md): in BTC these come out
+    # MOMENTUM-aligned (breakouts continue) rather than as reversal levels - the
+    # classic "bounce off support / fade resistance" psychology is NOT robust, and
+    # the robust ones correlate 0.4-0.66 with existing trend factors and make the
+    # composite worse when added. Kept as candidates; not in DEFAULT_FACTORS.
+    rng_252 = high.rolling(252).max() - low.rolling(252).min()
+    out["range_pos_252"] = (close - low.rolling(252).min()) / rng_252
+    out["dist_resist_90"] = close / high.rolling(90).max() - 1.0
+    out["dist_support_90"] = close / low.rolling(90).min() - 1.0
+
     # --- mean reversion ---
     out["rsi_14"] = _rsi(close, 14)
     bb_mid = close.rolling(20).mean()
