@@ -85,6 +85,11 @@ strategy:
     # allow_short: short BTC on strong bear conviction (engine fully supports it).
     # Set false for the long/flat profile (sits out bears instead of shorting).
     allow_short: true
+    # smooth_span: EMA smoothing of the composite score (damps daily noise).
+    # span=5 raises validation Sharpe (1.44 -> ~1.53), cuts trades ~30%, keeps test
+    # robust (all neighborhood cells beat BH, test Sharpe 1.06-1.17 / NAV 2.24-2.39).
+    # span=1 disables it.
+    smooth_span: 5
 
 report:
   output_dir: "reports"

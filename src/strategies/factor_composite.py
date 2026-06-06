@@ -61,6 +61,7 @@ def generate_signals(df: pd.DataFrame, params: dict) -> pd.Series:
     max_w = float(params.get("max_weight", 2.0))
     confidence_gain = float(params.get("confidence_gain", 0.0))
     allow_short = bool(params.get("allow_short", False))
+    smooth_span = int(params.get("smooth_span", 1))  # EMA smoothing of the score
     mode = params.get("mode", "walkforward")
 
     if mode == "fixed":
@@ -71,6 +72,11 @@ def generate_signals(df: pd.DataFrame, params: dict) -> pd.Series:
         )
     else:
         score = composite_signal_walkforward(df, factors, horizon=horizon)
+
+    # Optional EMA smoothing: damps daily noise -> fewer whipsaw trades, higher
+    # validation Sharpe, similar OOS. span=1 is a no-op (backward compatible).
+    if smooth_span > 1:
+        score = score.ewm(span=smooth_span).mean()
 
     ret = df["close"].astype(float).pct_change()
     rvol = (ret.rolling(vol_window).std() * np.sqrt(365)).replace(0.0, np.nan)
