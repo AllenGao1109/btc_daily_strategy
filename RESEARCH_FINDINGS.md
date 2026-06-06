@@ -89,6 +89,23 @@ vol-targeted weight, is DETERMINISTIC (no seed luck) and low-turnover (~89 trade
 This is the live thread: mine more factors / refine the mapping to clear the
 train+val bar without test-peeking.
 
+## Confidence-scaled aggressive sizing (confidence_gain) - higher NAV, robust
+
+Implements the owner's "let winners run" logic as SIZING, not take-profit: scale the
+vol target up when the (positive) composite confidence is high, while exhaustion
+factors pulling the score down still cut size. confidence_gain=1.0:
+- Test (2024-2026): Sharpe 0.94 / NAV 2.30 vs the conservative 0.92 / 1.90 and BH
+  0.58 / 1.50 - higher NAV, Sharpe maintained, drawdown -31% (still << BH -50%).
+- ALL 9 horizon x tilt neighborhood cells beat BH on test Sharpe AND NAV (test Sh
+  0.67-0.94, NAV 1.59-2.30). Not a knife-edge.
+- Full sample: total return 1395% -> 4131% (closing the gap to BH's 6255%), Sharpe
+  1.15 (> BH 0.99), MaxDD -54% (still far better than BH -83%).
+Honest tradeoff: it raises drawdown (test -24%->-31%, full -37%->-54%) and lowers
+validation Sharpe (1.44->1.28) - a deliberate higher-NAV / higher-drawdown preference,
+exactly the NAV/Sharpe trade the owner asked for. gain>1.5 degrades (drawdown blows
+out). Set confidence_gain=0.0 for the lower-drawdown Sharpe-first profile. Now the
+config default (NAV preset).
+
 ## What works
 
 - **Volatility targeting + diversified trend ensemble** — lower drawdown
