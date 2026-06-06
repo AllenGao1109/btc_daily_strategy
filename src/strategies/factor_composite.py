@@ -27,6 +27,7 @@ DEFAULT_FACTORS = [
     "btc_eth_rs_30",  # BTC relative strength vs ETH — the factor that cleared BH
     "rvol_z90",       # realized-vol z-score (capitulation/mean-reversion); improves
                       # the worst walk-forward neighborhood cell and lowers drawdown
+    "vol_asym_30",    # downside/upside vol asymmetry; validation-justified (1.58->1.65)
 ]
 
 

@@ -113,6 +113,9 @@ def build_factors(df: pd.DataFrame) -> pd.DataFrame:
     out["rvol_30"] = rv
     out["vol_of_vol_30"] = rv.rolling(30).std()
     out["vol_regime"] = rv / ret.rolling(180).std()  # short vs long vol
+    # Downside vs upside volatility asymmetry (fear/stress skew of risk).
+    out["vol_asym_30"] = (ret.clip(upper=0).rolling(30).std()
+                          / ret.clip(lower=0).rolling(30).std().replace(0, np.nan))
     rv20 = ret.rolling(20).std()
     out["rvol_z90"] = (rv20 - rv20.rolling(90).mean()) / rv20.rolling(90).std()
     # Downside vs upside volatility asymmetry (risk skew).
