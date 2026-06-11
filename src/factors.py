@@ -151,6 +151,26 @@ def build_factors(df: pd.DataFrame) -> pd.DataFrame:
         out["tx_growth_30"] = tx.pct_change(30)
         out["tx_z_90"] = (tx - tx.rolling(90).mean()) / tx.rolling(90).std()
 
+    # --- sentiment (only if the columns are present) ---
+    # Fear & Greed indexes are 0-100 composites; low = fear. The level tests the
+    # contrarian "buy fear / sell greed" hypothesis; z-score and momentum test
+    # sentiment *shifts*; the extreme flags isolate the tails. Flags are masked
+    # to NaN where the underlying index has no coverage yet (no fabricated 0s).
+    if "fng_value" in df.columns:  # crypto F&G (alternative.me, 2018+)
+        fng = df["fng_value"].astype(float)
+        out["fng_level"] = fng
+        out["fng_z_60"] = (fng - fng.rolling(60).mean()) / fng.rolling(60).std()
+        out["fng_mom_10"] = fng.diff(10)
+        out["fng_extreme_fear"] = (fng <= 25).astype(float).where(fng.notna())
+        out["fng_extreme_greed"] = (fng >= 75).astype(float).where(fng.notna())
+    if "cnn_fg" in df.columns:  # CNN US-equity F&G (2011+), cross-asset risk appetite
+        cnn = df["cnn_fg"].astype(float)
+        out["cnnfg_level"] = cnn
+        out["cnnfg_z_60"] = (cnn - cnn.rolling(60).mean()) / cnn.rolling(60).std()
+        out["cnnfg_mom_10"] = cnn.diff(10)
+        out["cnnfg_extreme_fear"] = (cnn <= 25).astype(float).where(cnn.notna())
+        out["cnnfg_extreme_greed"] = (cnn >= 75).astype(float).where(cnn.notna())
+
     return out
 
 

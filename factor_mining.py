@@ -24,6 +24,7 @@ from src.data import load_btc_data
 from src.factors import build_factors, forward_return, information_coefficient
 from src.features import build_features
 from src.onchain import ONCHAIN_METRICS, load_coinmetrics, merge_onchain
+from src.sentiment import load_cnn_fear_greed, load_crypto_fear_greed
 from src.validation import make_fixed_split
 
 HORIZONS = [1, 5, 20]
@@ -34,6 +35,8 @@ def main():
     cfg = load_config("config.yaml")
     df = build_features(load_btc_data(cfg))
     df = merge_onchain(df, load_coinmetrics(ONCHAIN_METRICS))
+    df = merge_onchain(df, load_crypto_fear_greed())
+    df = merge_onchain(df, load_cnn_fear_greed())
     factors = build_factors(df)
     splits = make_fixed_split(cfg["validation"])
     tr_idx = splits["train"].slice(df).index

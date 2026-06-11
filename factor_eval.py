@@ -22,11 +22,15 @@ from src.features import build_features
 from src.metrics import sharpe_ratio
 from src.onchain import ONCHAIN_METRICS, load_coinmetrics, merge_onchain
 from src.research import run_full, window_metrics
+from src.sentiment import load_cnn_fear_greed, load_crypto_fear_greed
 from src.strategies import get_strategy
 from src.validation import make_fixed_split
 
 ROBUST_FACTORS = ["halving_cos", "kurt_30", "vol_regime", "mvrv_z_365",
                   "mom_120", "mvrv_mom_30"]
+# Sentiment addition: CNN equity Fear & Greed z-score is the only sentiment
+# factor robust on all horizons in factor_mining (negative IC = contrarian).
+SENT_FACTORS = ROBUST_FACTORS + ["cnnfg_z_60"]
 
 
 def yb(res, lo=2019, hi=2026):
@@ -50,6 +54,13 @@ def main():
     bt = BacktestConfig.from_config(cfg)
     df = build_features(load_btc_data(cfg))
     df = merge_onchain(df, load_coinmetrics(ONCHAIN_METRICS))
+    df = merge_onchain(df, load_crypto_fear_greed())
+    df = merge_onchain(df, load_cnn_fear_greed())
+    # ETH close for the cross-crypto factor (CoinMetrics daily price, ffilled).
+    eth = load_coinmetrics(["PriceUSD"], asset="eth").rename(
+        columns={"PriceUSD": "eth_close"}
+    )
+    df = merge_onchain(df, eth)
     splits = make_fixed_split(cfg["validation"])
     train_end = pd.Timestamp(cfg["validation"]["train_end"], tz="UTC")
 
@@ -59,6 +70,7 @@ def main():
              "target_vol": 0.55, "vol_window": 45}), bt)
 
     score = composite_signal(df, train_end, ROBUST_FACTORS, horizon=20)
+    score_s = composite_signal(df, train_end, SENT_FACTORS, horizon=20)
 
     # Several position mappings; selection is by the train+val years only.
     ret = df["close"].astype(float).pct_change()
@@ -74,7 +86,19 @@ def main():
         mk("F_flatVT", (score > 0).astype(float) * vt_size),     # long/flat, vol-target size
         mk("F_lev", score.clip(lower=0.0) * 2.0),                 # signal-scaled leverage 0..2x
         mk("F_levVT", (0.5 + score).clip(0.0, 2.0) * vt_size),   # bull-tilt x vol-target
+        # Same mappings with the CNN sentiment factor added to the composite.
+        mk("S_flatVT", (score_s > 0).astype(float) * vt_size),
+        mk("S_lev", score_s.clip(lower=0.0) * 2.0),
+        mk("S_levVT", (0.5 + score_s).clip(0.0, 2.0) * vt_size),
     ]
+    # Production factor_composite strategy with / without the sentiment factor.
+    from src.strategies.factor_composite import DEFAULT_FACTORS
+    prod_params = dict(cfg["strategy"]["params"])
+    mappings.append(("PROD", run_full(
+        df, get_strategy("factor_composite")(df, prod_params), bt)))
+    mappings.append(("PROD+S", run_full(
+        df, get_strategy("factor_composite")(
+            df, {**prod_params, "factors": DEFAULT_FACTORS + ["cnnfg_z_60"]}), bt)))
     rows = [("BH", bh), ("ENS", ens)] + mappings
     print(f"{'strat':9s} | " + " | ".join(f"{w[:3]}" for w in ["train", "validation", "test"])
           + " || meanYr  minYr  pos  trd  [tv-mean]")

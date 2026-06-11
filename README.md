@@ -37,6 +37,19 @@ installed or you are offline, you can:
 - run with deterministic synthetic data via `--synthetic` (for testing only —
   this is **not** real market data).
 
+Enrichment data (best-effort; strategies degrade gracefully without it):
+
+- on-chain metrics — CoinMetrics community API, with an automatic fallback to
+  CoinMetrics' daily GitHub CSV dump (`src/onchain.py`);
+- sentiment — alternative.me crypto Fear & Greed and the CNN equity Fear &
+  Greed archive (`src/sentiment.py`);
+- if the market-data APIs are blocked entirely (restricted networks), run
+  `python3 fetch_mirror_data.py` to bootstrap every `data/raw` cache from
+  public GitHub mirrors. Note: that path synthesizes OHLC from daily closes
+  (open = previous close; high/low collapse to the close range) — fine for the
+  close-based engine and factors, but Donchian channels degrade to close-based
+  channels. The script's docstring documents this.
+
 ## How to run the backtest
 
 ```bash

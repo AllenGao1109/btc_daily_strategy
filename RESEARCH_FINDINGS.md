@@ -39,6 +39,49 @@ Caveat: full-sample total return trails BH because vol-targeting gives up the
 2017-2021 bull; the win is out-of-sample (the deployment-relevant window) and on
 risk-adjusted terms throughout.
 
+## RESULT: CNN equity Fear & Greed improves the composite; crypto F&G does not
+
+Tested the two sentiment indexes (this answers the "different data regime"
+hypothesis below — sentiment was the predicted next frontier):
+  - **alternative.me crypto Fear & Greed** (0-100 daily, 2018-02+)
+  - **CNN Business equity Fear & Greed** (0-100 US trading days, 2011+), as a
+    cross-asset risk-appetite proxy
+
+Factor mining verdict (IC stability on train+val, test never used):
+  - **`cnnfg_z_60` (CNN F&G 60d z-score) is robust on ALL 3 horizons** with a
+    consistently NEGATIVE IC (h20: train -0.13 / val -0.20) — i.e. contrarian:
+    stretched-high equity sentiment precedes weak BTC returns. It ranks 3rd of
+    54 factors, behind only halving_cos and vol_regime, and it is *exogenous*
+    (not derived from BTC price), hence orthogonal to the price/on-chain block.
+  - **Every crypto F&G factor failed robustness** (train/val sign flips). As
+    suspected, the crypto index is built largely from BTC price/volatility, so
+    it adds nothing beyond the existing price factors.
+
+Adding `cnnfg_z_60` to the production `factor_composite` (selection on
+train+val only: val Sharpe 1.05 -> 1.12, train+val-years mean 0.98 -> 1.03;
+test checked only afterwards):
+
+| window (this data snapshot)   | PROD   | PROD + cnnfg_z_60 |
+|-------------------------------|--------|-------------------|
+| train Sharpe / NAV            | 0.96 / 4.37 | 0.98 / 4.66  |
+| validation Sharpe / NAV       | 1.05 / 1.79 | 1.12 / 1.85  |
+| test (2024-26) Sharpe / NAV   | 1.02 / 2.05 | **1.04 / 2.16** |
+| trades                        | 86     | 84                |
+
+Consistent improvement across all three windows with *fewer* trades —
+`cnnfg_z_60` is now in `DEFAULT_FACTORS`. Caveats:
+  - CNN history is community-archived (whit3rabbit/fear-greed-data splices the
+    2011-2021 archive with the live CNN endpoint); pre-2021 values are a
+    reconstruction.
+  - The BTC-equity correlation regime that powers this factor is post-2020;
+    monitor per-year IC for decay.
+  - Crypto F&G archive ends ~2026-04 in this environment (API blocked); the
+    last weeks are forward-filled. Irrelevant to the verdict (factor rejected).
+  - This round ran on CoinMetrics mirror prices with synthesized OHLC (see
+    `fetch_mirror_data.py`); PROD baseline numbers shift slightly vs the
+    CryptoCompare snapshot (1.02/2.05 vs the 0.98/2.00 in config.yaml notes)
+    but the comparison is internally consistent.
+
 ## How the lead was built: factor mining (deterministic)
 
 Pivoting from "more models on the same features" to MINING NEW FACTORS found the

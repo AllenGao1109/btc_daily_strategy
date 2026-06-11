@@ -60,6 +60,10 @@ strategy:
   #   buy_and_hold:     Sharpe 0.58, NAV 1.50, MaxDD -50%
   # Train+val years mean-yearly Sharpe 1.41 vs BH 1.12. ~84 trades. The edge is
   # broad-based (4/8 win years) and strongest in bear years (downside protection).
+  # 2026-06 update: added cnnfg_z_60 (CNN equity Fear & Greed 60d z-score,
+  # contrarian) to DEFAULT_FACTORS. Selected on train+val only (val Sharpe
+  # 1.05 -> 1.12); test confirmed afterwards (1.02/2.05 -> 1.04/2.16 on the
+  # CoinMetrics-mirror data snapshot). See RESEARCH_FINDINGS.md.
   name: "factor_composite"
   params:
     train_end: "2021-12-31"   # factor signs use only data <= this (no lookahead)
