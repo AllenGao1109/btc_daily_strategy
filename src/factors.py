@@ -258,6 +258,14 @@ def build_factors(df: pd.DataFrame) -> pd.DataFrame:
         miner20 = (df["riot_close"].astype(float).pct_change(20)
                    + df["mara_close"].astype(float).pct_change(20)) / 2.0
         out["miner_rs_20"] = miner20 - close.pct_change(20)
+    if "gld_close" in df.columns:  # debasement-trade rotation: gold vs BTC
+        gld = df["gld_close"].astype(float)
+        out["gld_mom_60"] = gld.pct_change(60)
+        out["btc_gld_rs_60"] = close.pct_change(60) - gld.pct_change(60)
+    if "smh_close" in df.columns and "qqq_close" in df.columns:
+        # Semiconductor cycle vs broad tech: liquidity/growth-beta appetite.
+        out["smh_rs_60"] = (df["smh_close"].astype(float).pct_change(60)
+                            - df["qqq_close"].astype(float).pct_change(60))
 
     # --- sentiment (only if the columns are present) ---
     # Fear & Greed indexes are 0-100 composites; low = fear. The level tests the

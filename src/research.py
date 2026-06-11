@@ -38,7 +38,7 @@ def load_research_frame(config: dict[str, Any]) -> pd.DataFrame:
     from .cryptoquant import load_cme_basis, load_cryptoquant
     from .data import load_btc_data
     from .features import build_features
-    from .macro import load_dxy, load_fred_macro
+    from .macro import load_dxy, load_fred_macro, load_hy_oas
     from .onchain import (
         ONCHAIN_METRICS,
         load_coinmetrics,
@@ -53,6 +53,8 @@ def load_research_frame(config: dict[str, Any]) -> pd.DataFrame:
     df = merge_onchain(df, load_cnn_fear_greed())
     df = merge_onchain(df, load_stablecoin_mcap())
     df = merge_onchain(df, load_fred_macro())
+    # Full-history HY OAS overrides the short panel column (merged after it).
+    df = merge_onchain(df, load_hy_oas())
     df = merge_onchain(df, load_dxy())
     df = merge_onchain(df, load_cryptoquant())
     df = merge_onchain(df, load_cme_basis())

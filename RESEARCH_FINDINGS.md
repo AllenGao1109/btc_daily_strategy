@@ -167,6 +167,34 @@ flat vs BH over the last 12 months and closer to the tripwire's soft leg.
 The trend ensemble is fee-disqualified even at 0.2% (159-408 trades, fees
 442-677% of initial capital, val Sharpe <= PROD+S at every band).
 
+## ROUND: credit / gold / semiconductors — all fail at the gate
+
+Hypothesis batch #2 of the exogenous-factor campaign (the 2022-23 validation
+window was a RATES-vol crisis, so credit and real-asset rotation seemed like
+the right fear gauges). Full-history HY OAS restored via an archive mirror
+(`load_hy_oas`, 1996+, release-lag adjusted) — closing the earlier
+"not testable" gap with a definitive verdict:
+
+  - **HY credit spread (hyoas_z_60 / chg_20): train/val SIGN FLIP** (h20:
+    -0.10 train vs +0.15 val). Credit-risk appetite did not translate across
+    crypto regimes. Previously "untestable", now tested and FAILED.
+  - **Gold momentum / BTC-gold relative strength: sign flips too** (gld_mom
+    -0.20 train vs +0.15 val). The debasement-rotation story does not survive
+    the gate.
+  - smh_rs_60 (semis vs QQQ): 1 horizon only, breadth 2+/2- — below the
+    >=2-horizon bar every adopted factor met; not taken to the marginal test
+    (no exceptions, that is multiplicity discipline).
+  - MOVE index (the *right* vol for 2022): ICE-proprietary, no free
+    full-history archive found — genuinely unavailable, not untested-by-laziness.
+
+Exogenous campaign scoreboard after two hypothesis batches (yen carry /
+ARKK / miner equities / gold / credit / semis): 8 mechanisms tested, 2 gate
+passes (yen family), 0 adoptions. The owner's CNN Fear & Greed remains the
+only adopted exogenous factor. The bar that keeps rejecting candidates is
+not the IC gate — it is (a) family duplication against 9 incumbents and
+(b) the validation-Sharpe marginal in the composite. Both are working as
+designed.
+
 ## ROUND: exogenous cross-asset factors (yen carry / ARKK / miner equities)
 
 Hypothesis-first round: BTC's marginal buyers leave footprints in other

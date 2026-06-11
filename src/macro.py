@@ -126,6 +126,46 @@ def apply_release_lag(panel: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+HY_OAS_ARCHIVE = (
+    "https://raw.githubusercontent.com/maaurocp/Trading_Protocol/main/"
+    "data/raw/fred_BAMLH0A0HYM2.csv"
+)
+
+
+def load_hy_oas(
+    *,
+    force_reload: bool = False,
+    raw_dir: Path | None = None,
+) -> pd.DataFrame:
+    """Load full-history ICE BofA HY OAS (1996+), release-lag adjusted, cached.
+
+    The FRED panel mirror only covers this series from 2023; this archive
+    mirror restores the full history so the credit factors are testable on the
+    train window. Same series id, same release-lag handling (published t+1).
+    """
+    raw_dir = raw_dir or RAW_DIR
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    cache = raw_dir / "hy_oas.csv"
+    if cache.exists() and not force_reload:
+        df = pd.read_csv(cache, index_col=0)
+        df.index = pd.to_datetime(df.index, utc=True)
+        df.index.name = "date"
+        return df
+
+    raw = pd.read_csv(io.BytesIO(_fetch(HY_OAS_ARCHIVE)))
+    raw.columns = ["date", "BAMLH0A0HYM2"]
+    panel = pd.DataFrame(
+        {"BAMLH0A0HYM2": pd.to_numeric(raw["BAMLH0A0HYM2"], errors="coerce").values},
+        index=pd.to_datetime(raw["date"], utc=True).dt.normalize(),
+    )
+    panel = panel[~panel.index.duplicated(keep="first")].sort_index()
+    out = apply_release_lag(panel)
+    if out.empty:
+        raise RuntimeError("HY OAS loader returned no data.")
+    out.to_csv(cache)
+    return out
+
+
 def load_dxy(
     *,
     force_reload: bool = False,

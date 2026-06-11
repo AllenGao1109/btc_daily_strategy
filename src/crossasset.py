@@ -43,6 +43,8 @@ TV_SERIES = {
     "qqq_close": "QQQ_nasdaq100_etf__daily.csv",
     "riot_close": "RIOT_riot_miner_stock__daily.csv",
     "mara_close": "MARA_marathon_miner_stock__daily.csv",
+    "gld_close": "GLD_gold_etf__daily.csv",
+    "smh_close": "SMH_vaneck_semiconductor_etf__daily.csv",
 }
 
 
