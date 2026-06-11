@@ -38,6 +38,10 @@ ONCHAIN_METRICS = [
     "FlowInExUSD",   # exchange inflows (sell pressure)
     "FlowOutExUSD",  # exchange outflows (accumulation)
     "TxCnt",         # transaction count
+    "HashRate",      # network hash rate (miner-economics factors)
+    "IssTotUSD",     # issuance value (Puell multiple)
+    "SplyExNtv",     # native supply held on exchanges
+    "SplyCur",       # current total supply (exchange supply ratio denominator)
 ]
 
 
@@ -164,6 +168,35 @@ def load_okx_funding(
     daily.name = "funding_rate"
     daily.to_csv(cache)
     return daily
+
+
+def load_stablecoin_mcap(
+    assets: tuple[str, ...] = ("usdt", "usdc"),
+    *,
+    force_reload: bool = False,
+    raw_dir: Path | None = None,
+) -> pd.DataFrame:
+    """Aggregate stablecoin market cap (USD), cached, UTC-indexed.
+
+    Sums CoinMetrics ``CapMrktCurUSD`` across ``assets``. A coin contributes 0
+    before its launch (USDC starts 2018-10), so the aggregate is continuous
+    from the first asset's history onward.
+
+    Returns:
+        DataFrame with one float column ``stable_mcap_usd``.
+    """
+    raw_dir = raw_dir or RAW_DIR
+    total: pd.Series | None = None
+    for asset in assets:
+        cap = load_coinmetrics(
+            ["CapMrktCurUSD"], asset=asset, start_date="2015-01-01",
+            force_reload=force_reload, raw_dir=raw_dir,
+        )["CapMrktCurUSD"]
+        total = cap if total is None else total.add(cap.reindex(
+            total.index.union(cap.index)).fillna(0.0), fill_value=0.0)
+    out = total.to_frame("stable_mcap_usd").sort_index()
+    out.index.name = "date"
+    return out
 
 
 def merge_onchain(df: pd.DataFrame, onchain: pd.DataFrame) -> pd.DataFrame:

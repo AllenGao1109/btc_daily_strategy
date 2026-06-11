@@ -34,7 +34,13 @@ import urllib.request
 import pandas as pd
 
 from src.data import PROCESSED_DIR, RAW_DIR, clean_data
-from src.onchain import CM_GITHUB_MIRROR, ONCHAIN_METRICS, load_coinmetrics
+from src.macro import load_dxy, load_fred_macro
+from src.onchain import (
+    CM_GITHUB_MIRROR,
+    ONCHAIN_METRICS,
+    load_coinmetrics,
+    load_stablecoin_mcap,
+)
 from src.sentiment import load_cnn_fear_greed, load_crypto_fear_greed
 
 
@@ -81,6 +87,12 @@ def main() -> None:
     print(f"Crypto F&G: {fng.index.min().date()} -> {fng.index.max().date()}")
     cnn = load_cnn_fear_greed(force_reload=True)
     print(f"CNN equity F&G: {cnn.index.min().date()} -> {cnn.index.max().date()}")
+    stab = load_stablecoin_mcap(force_reload=True)
+    print(f"Stablecoin mcap: {stab.index.min().date()} -> {stab.index.max().date()}")
+    fred = load_fred_macro(force_reload=True)
+    print(f"FRED macro: {fred.index.min().date()} -> {fred.index.max().date()}")
+    dxy = load_dxy(force_reload=True)
+    print(f"DXY: {dxy.index.min().date()} -> {dxy.index.max().date()}")
 
 
 if __name__ == "__main__":

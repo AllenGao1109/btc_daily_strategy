@@ -101,6 +101,49 @@ at BOTH bands — the sentiment conclusion is not band-sensitive. The 0.20+S
 configuration is the designated alternate if the fee assumption ever drops
 (e.g. 0.1% maker-taker), on the strength of its worst-year/consistency profile.
 
+## ROUND: miner / exchange-supply / stablecoin / macro factors — ZERO adopted
+
+Mined four new free, industry-recognized factor families (73 factors total now,
+26 pass the train+val IC gate). Loaders: `src/macro.py` (FRED + DXY, with
+release-lag re-stamping — H.15 yields and HY OAS are published t+1 and get an
+extra day of lag to avoid a ~21h leak), `load_stablecoin_mcap` (USDT+USDC),
+ONCHAIN_METRICS extended with HashRate/IssTotUSD/SplyExNtv/SplyCur.
+
+IC-gate results (train+val sign stability):
+  - PASSED: exsply_ratio (3H, score 0.283 — 2nd best overall), exsply_z_180
+    (3H), stable_growth_30/90, dgs10_chg_60, rrp_chg_30, exsply_chg_30.
+  - FAILED: hash ribbons, Puell multiple (famous, but val sign flips), SSR,
+    VIX level/z, 10y-2y curve, DXY momentum (1H only).
+  - NOT TESTABLE: HY OAS — the mirror archive only covers 2023+, zero train
+    coverage. (NUPL was skipped a priori: 1 - 1/MVRV is a monotonic transform
+    of MVRV, identical Spearman IC.)
+
+Composite marginals looked spectacular on the selectable windows — every
+passing factor lifted validation Sharpe (1.12 -> up to 1.49) and repaired the
+2022 worst-year (-1.54 -> as good as +0.40). **All of it was 2022-23 regime
+fitting.** The factor-level OOS diagnostic (h20 IC, computed for reporting
+only, after deciding not to swap the default) showed every candidate's sign
+FLIPS in 2024-26:
+
+| factor            | train 17-21 | val 22-23 | test 24-26 |
+|-------------------|-------------|-----------|------------|
+| exsply_ratio      | -0.14       | -0.35     | **+0.19**  |
+| stable_growth_30  | +0.21       | +0.22     | **-0.11**  |
+| dgs10_chg_60      | -0.08       | -0.17     | **+0.11**  |
+| rrp_chg_30        | -0.10       | -0.24     | +0.02      |
+
+Economic post-mortem: all four key off 2022 events (hiking cycle, Terra/FTX).
+The exchange-supply story structurally broke in the ETF era — since 2024-01,
+coins leaving exchanges flow into ETF custodians, inverting the old
+"self-custody = bullish" reading. Verdict: **DEFAULT_FACTORS unchanged.**
+The lesson compounds the ML one: an IC gate on train+val windows is necessary
+but not sufficient when train+val contains one dominant macro regime; prefer
+factors whose yearly IC is broad-based, not event-concentrated.
+
+Monitoring note: even adopted factors show 2024-25 decay (cnnfg_z_60 test-
+window IC +0.08 vs -0.20 in val; 2026 back to -0.17). Re-run the yearly-IC
+diagnostic as test years accumulate.
+
 ## How the lead was built: factor mining (deterministic)
 
 Pivoting from "more models on the same features" to MINING NEW FACTORS found the

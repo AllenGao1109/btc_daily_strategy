@@ -151,6 +151,58 @@ def build_factors(df: pd.DataFrame) -> pd.DataFrame:
         out["tx_growth_30"] = tx.pct_change(30)
         out["tx_z_90"] = (tx - tx.rolling(90).mean()) / tx.rolling(90).std()
 
+    # --- miner economics (only if the columns are present) ---
+    # Hash ribbons (30/60d hash-rate MA cross: miner capitulation/recovery) and
+    # the Puell multiple (issuance value vs its own 1y mean: cycle top/bottom).
+    if "HashRate" in df.columns:
+        hr = df["HashRate"].astype(float)
+        out["hash_ribbon_3060"] = hr.rolling(30).mean() / hr.rolling(60).mean() - 1.0
+        out["hash_growth_60"] = hr.rolling(7).mean().pct_change(60)
+    if "IssTotUSD" in df.columns:
+        iss = df["IssTotUSD"].astype(float)
+        out["puell_365"] = iss / iss.rolling(365, min_periods=180).mean()
+
+    # --- exchange supply stock (complements the flow factors above) ---
+    if "SplyExNtv" in df.columns and "SplyCur" in df.columns:
+        exr = df["SplyExNtv"].astype(float) / df["SplyCur"].astype(float)
+        out["exsply_ratio"] = exr
+        out["exsply_z_180"] = (exr - exr.rolling(180).mean()) / exr.rolling(180).std()
+        out["exsply_chg_30"] = exr.diff(30)
+
+    # --- stablecoin liquidity ---
+    # SSR (BTC mcap / stablecoin mcap): low = lots of dry powder vs BTC. Supply
+    # growth = net stablecoin issuance, a crypto-native liquidity inflow proxy.
+    if "stable_mcap_usd" in df.columns:
+        stab = df["stable_mcap_usd"].astype(float)
+        out["stable_growth_30"] = stab.pct_change(30)
+        out["stable_growth_90"] = stab.pct_change(90)
+        if "CapMrktCurUSD" in df.columns:
+            ssr = df["CapMrktCurUSD"].astype(float) / stab
+            out["ssr_z_365"] = (ssr - ssr.rolling(365, min_periods=180).mean()) / ssr.rolling(
+                365, min_periods=180
+            ).std()
+            out["ssr_mom_30"] = ssr.pct_change(30)
+
+    # --- macro risk appetite / liquidity (see src.macro for release-lag rules) ---
+    if "VIXCLS" in df.columns:
+        vix = df["VIXCLS"].astype(float)
+        out["vix_level"] = vix
+        out["vix_z_60"] = (vix - vix.rolling(60).mean()) / vix.rolling(60).std()
+    if "DGS10" in df.columns:
+        out["dgs10_chg_60"] = df["DGS10"].astype(float).diff(60)
+    if "DFII10" in df.columns:
+        out["real10_chg_60"] = df["DFII10"].astype(float).diff(60)
+    if "T10Y2Y" in df.columns:
+        out["curve_t10y2y"] = df["T10Y2Y"].astype(float)
+    if "BAMLH0A0HYM2" in df.columns:
+        hy = df["BAMLH0A0HYM2"].astype(float)
+        out["hyoas_z_60"] = (hy - hy.rolling(60).mean()) / hy.rolling(60).std()
+        out["hyoas_chg_20"] = hy.diff(20)
+    if "RRPONTSYD" in df.columns:
+        out["rrp_chg_30"] = df["RRPONTSYD"].astype(float).diff(30)
+    if "dxy_close" in df.columns:
+        out["dxy_mom_60"] = df["dxy_close"].astype(float).pct_change(60)
+
     # --- sentiment (only if the columns are present) ---
     # Fear & Greed indexes are 0-100 composites; low = fear. The level tests the
     # contrarian "buy fear / sell greed" hypothesis; z-score and momentum test

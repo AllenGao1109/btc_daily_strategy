@@ -20,7 +20,13 @@ from src.data import load_btc_data
 from src.factors import composite_signal
 from src.features import build_features
 from src.metrics import sharpe_ratio
-from src.onchain import ONCHAIN_METRICS, load_coinmetrics, merge_onchain
+from src.macro import load_dxy, load_fred_macro
+from src.onchain import (
+    ONCHAIN_METRICS,
+    load_coinmetrics,
+    load_stablecoin_mcap,
+    merge_onchain,
+)
 from src.research import run_full, window_metrics
 from src.sentiment import load_cnn_fear_greed, load_crypto_fear_greed
 from src.strategies import get_strategy
@@ -56,6 +62,9 @@ def main():
     df = merge_onchain(df, load_coinmetrics(ONCHAIN_METRICS))
     df = merge_onchain(df, load_crypto_fear_greed())
     df = merge_onchain(df, load_cnn_fear_greed())
+    df = merge_onchain(df, load_stablecoin_mcap())
+    df = merge_onchain(df, load_fred_macro())
+    df = merge_onchain(df, load_dxy())
     # ETH close for the cross-crypto factor (CoinMetrics daily price, ffilled).
     eth = load_coinmetrics(["PriceUSD"], asset="eth").rename(
         columns={"PriceUSD": "eth_close"}
