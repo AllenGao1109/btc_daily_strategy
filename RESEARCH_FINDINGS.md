@@ -144,6 +144,31 @@ Monitoring note: even adopted factors show 2024-25 decay (cnnfg_z_60 test-
 window IC +0.08 vs -0.20 in val; 2026 back to -0.17). Re-run the yearly-IC
 diagnostic as test years accumulate.
 
+## Standing tools: breadth gate + adopted-factor decay monitor
+
+Implemented the two process fixes from the round above:
+  - `factor_mining.py` now reports yearly-IC **breadth** (yr_support/yr_oppose
+    over 2019-2023 at h20). It would have flagged dgs10_chg_60 (1+/3-) and
+    rrp_chg_30 (3+/2-) BEFORE any composite test. Limits: exsply_ratio scores
+    a clean 3+/0- — breadth cannot catch structural regime breaks (ETF era),
+    only event concentration; and slow cycle factors (halving_cos 2+/2-,
+    mvrv_z_365 1+/3-) legitimately score poorly within years — judged by
+    mechanism, not auto-rejected.
+  - `factor_monitor.py` — standing decay monitor for DEFAULT_FACTORS
+    (reporting only, never for selection). First run (test = 2024-01 ->
+    2026-05): **5/9 adopted factors flagged** — vol_regime, mom_120,
+    cnnfg_z_60 DECAYED (test-window sign flip); kurt_30, btc_eth_rs_30 WEAK
+    (|IC| < 0.03). halving_cos, mvrv_z_365, mvrv_mom_30, ex_netflow_to_mcap
+    hold. The composite still beats BH on test (1.04/2.16 vs 0.76/1.81) on
+    the strength of the holders + IC-weighting + vol targeting, but the
+    factor base is eroding in the post-ETF regime.
+
+Open decision (owner-level, not taken unilaterally): rolling the validation
+split forward (e.g. train<=2023, validate on 2024-25) would let us re-select
+factors for the new regime, but it consumes the current test window as
+selection data — after that, only 2026+ remains as genuinely untouched
+out-of-sample. Defer until the flags persist for another re-run or two.
+
 ## How the lead was built: factor mining (deterministic)
 
 Pivoting from "more models on the same features" to MINING NEW FACTORS found the
