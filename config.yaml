@@ -79,9 +79,24 @@ strategy:
   # agreed: 1.08/2.17 vs 0.97/1.96. Statistical caveat on record (see
   # RESEARCH_FINDINGS.md): no window's edge over buy-and-hold is statistically
   # significant; deflated-Sharpe P[skill] 0.13-0.63.
+  # 2026-06 update 3: ELR de-leveraging overlay added to composite_blend.
+  # System leverage (CryptoQuant Estimated Leverage Ratio) is the strongest
+  # standalone IC in the 107-factor library but added nothing inside the
+  # return composite (a risk factor, not a return factor). As a position
+  # overlay (scale down when ELR's 180d z-score stretches above z0), selected
+  # on train+val across a 2x2 grid: validation Sharpe 1.47 -> 1.64 with every
+  # grid corner improving, validation MaxDD -25% -> -17%; tie-break by fewer
+  # trades picked z0=0.5/k=0.5. Test, read after selection: Sharpe ~flat
+  # (1.06 vs 1.08), test MaxDD improved (-20% vs -26%), NAV gave back some
+  # upside (1.91 vs 2.17) - the risk improvement is confirmed, the return
+  # cost is the price of the insurance.
   name: "composite_blend"
   params:
     blend: 0.75               # weight on the composite leg (1-x on ensemble)
+    elr_overlay: true         # de-leverage when system leverage is stretched
+    elr_z0: 0.5
+    elr_k: 0.5
+    elr_floor: 0.25
     train_end: "2021-12-31"   # factor signs use only data <= this (no lookahead)
     horizon: 20
     tilt: 0.5

@@ -54,3 +54,41 @@ def test_blend_extremes_match_single_legs():
     pd.testing.assert_series_equal(
         only_comp, comp.reindex(df.index).fillna(0.0).rename("raw_signal")
     )
+
+
+def test_elr_overlay_derisk_when_leverage_stretched():
+    df = _frame()
+    base = composite_blend.generate_signals(df, dict(PARAMS))
+
+    # Flat leverage for 400 days, then a sharp sustained spike: the z-score
+    # stretches far above z0 and the overlay must scale exposure down.
+    elr = pd.Series(0.2, index=df.index)
+    elr.iloc[400:] = 0.6
+    df2 = df.copy()
+    df2["est_leverage"] = elr
+    shaped = composite_blend.generate_signals(df2, dict(PARAMS))
+
+    pd.testing.assert_series_equal(shaped.iloc[:400], base.iloc[:400])
+    spike = shaped.iloc[410:440]
+    base_spike = base.iloc[410:440]
+    mask = base_spike > 0.01
+    assert (spike[mask] < base_spike[mask]).all()
+    # Floor respected: never scaled below floor * base.
+    assert (spike[mask] >= 0.25 * base_spike[mask] - 1e-12).all()
+
+    off = composite_blend.generate_signals(
+        df2, {**PARAMS, "elr_overlay": False}
+    )
+    pd.testing.assert_series_equal(off, base)
+
+
+def test_elr_overlay_causal_truncation_invariant():
+    # Truncation point is kept past train_end + IC horizon so the composite
+    # leg's train-window IC signs are identical; what is being tested is that
+    # appending future rows never changes past overlay-scaled weights.
+    df = _frame()
+    rng = np.random.default_rng(13)
+    df["est_leverage"] = 0.2 + np.cumsum(rng.normal(0, 0.003, len(df)))
+    full = composite_blend.generate_signals(df, dict(PARAMS))
+    trunc = composite_blend.generate_signals(df.iloc[:580], dict(PARAMS))
+    pd.testing.assert_series_equal(full.iloc[:580], trunc)

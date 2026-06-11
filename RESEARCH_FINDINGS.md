@@ -167,6 +167,36 @@ flat vs BH over the last 12 months and closer to the tripwire's soft leg.
 The trend ensemble is fee-disqualified even at 0.2% (159-408 trades, fees
 442-677% of initial capital, val Sharpe <= PROD+S at every band).
 
+## RESULT: ELR de-leveraging OVERLAY adopted — risk factors enter through the risk door
+
+Follow-up to the round below: elr_z_180 was rejected as a *return* factor
+(composite marginal), so it was re-tested in its mechanically correct role —
+a position overlay that scales exposure down when system leverage stretches
+(`risk_shaping.py`; mult = clip(1 - k*max(0, z-z0), floor, 1)). Selection
+pre-registered on train+val over a 2x2 (z0, k) grid:
+
+| variant            | val Sharpe | val MaxDD | val Calmar | test (after) |
+|--------------------|-----------|-----------|------------|--------------|
+| blend (incumbent)  | 1.47      | -25%      | 2.10       | 1.08 / 2.17 / -26% |
+| **OV z0=.5 k=.5**  | **1.64**  | **-17%**  | **3.37**   | 1.06 / 1.91 / -20% |
+| (other 3 corners)  | 1.52-1.64 | -17..-23% | 2.42-2.86  | all viable   |
+
+Every grid corner improves validation Sharpe — not a knife-edge. The winner
+beats the incumbent on the PRODUCTION objective itself (val Sharpe 1.47 ->
+1.64), so this is a standard adoption, not an objective switch; tie-break
+(fewer trades) picked z0=0.5/k=0.5 over z0=1.0/k=0.5. Test, read after
+selection: Sharpe flat (1.06 vs 1.08), test MaxDD -26% -> -20%, NAV 2.17 ->
+1.91 — the risk improvement is real and the give-back in upside is the
+insurance premium. Significance caveats apply as everywhere.
+
+Lesson worth keeping: the factor pipeline's verdict "no marginal return
+value" does not mean "no value" — IC sign quality and composite membership
+test RETURN information, while ELR carries RISK-TIMING information. The
+right architecture question for any strong-IC reject is "selection factor or
+sizing factor?". (Monitor note: trailing edge under the new production
+config reads +0.08, HOLD; monthly automation now runs via
+.github/workflows/monitor.yml.)
+
 ## ROUND: leverage / premia / funding / EPU — zero adopted; ELR is the new IC champion
 
 Four new channels (CryptoQuant Fund Data + Derivatives, plus the EPU series
