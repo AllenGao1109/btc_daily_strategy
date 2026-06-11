@@ -47,7 +47,8 @@ from src.sentiment import load_cnn_fear_greed, load_crypto_fear_greed
 
 
 def build_btc_ohlcv_cache(start: str = "2016-12-01") -> pd.DataFrame:
-    """Build data/raw/BTC-USD_1d.csv from the CoinMetrics GitHub daily dump."""
+    """Build data/raw/BTC-USD_1d.csv from the CoinMetrics GitHub daily dump,
+    gap-filled to the present from a daily-updated snapshot mirror."""
     url = CM_GITHUB_MIRROR.format(asset="btc")
     req = urllib.request.Request(url, headers={"User-Agent": "btc-research/1.0"})
     with urllib.request.urlopen(req, timeout=180) as resp:  # noqa: S310
@@ -58,8 +59,9 @@ def build_btc_ohlcv_cache(start: str = "2016-12-01") -> pd.DataFrame:
 
     close = pd.to_numeric(cm["PriceUSD"], errors="coerce")
     volume = pd.to_numeric(cm["volume_reported_spot_usd_1d"], errors="coerce")
-    df = pd.DataFrame(index=cm.index)
-    df["close"] = close
+    close, volume = _gap_fill_recent(close, volume)
+
+    df = pd.DataFrame({"close": close})
     df["open"] = close.shift(1)
     df["high"] = df[["open", "close"]].max(axis=1)
     df["low"] = df[["open", "close"]].min(axis=1)
@@ -74,6 +76,56 @@ def build_btc_ohlcv_cache(start: str = "2016-12-01") -> pd.DataFrame:
     if processed.exists():
         processed.unlink()
     return clean_data(df)
+
+
+# Daily-updated Yahoo-sourced snapshot log (last snapshot of each UTC day is
+# taken ~23:50 UTC, i.e. within minutes of the daily close). Used ONLY to
+# extend the CoinMetrics series from its last full update to the present; the
+# current (incomplete) UTC day is excluded so daily-close semantics hold.
+GAP_FILL_URL = (
+    "https://raw.githubusercontent.com/DSmarc7/daily-quant-log/main/"
+    "market-tracker/data/crypto.csv"
+)
+
+
+def _gap_fill_recent(
+    close: pd.Series, volume: pd.Series
+) -> tuple[pd.Series, pd.Series]:
+    """Append post-CoinMetrics daily closes from the snapshot mirror."""
+    try:
+        req = urllib.request.Request(
+            GAP_FILL_URL, headers={"User-Agent": "btc-research/1.0"}
+        )
+        with urllib.request.urlopen(req, timeout=60) as resp:  # noqa: S310
+            snap = pd.read_csv(resp)
+    except Exception as exc:  # noqa: BLE001 - gap fill is best-effort
+        print(f"[warn] BTC gap-fill mirror unavailable: {exc}")
+        return close, volume
+    snap = snap[snap["ticker"] == "BTC-USD"].copy()
+    snap["fetched_at_utc"] = pd.to_datetime(snap["fetched_at_utc"], utc=True)
+    snap["date"] = pd.to_datetime(snap["date"], utc=True).dt.normalize()
+    snap = snap.sort_values("fetched_at_utc").groupby("date").last()
+    today = pd.Timestamp.now(tz="UTC").normalize()
+    last_full = close.dropna().index.max()
+    gap = snap[(snap.index > last_full) & (snap.index < today)]
+    if gap.empty:
+        return close, volume
+
+    # Cross-check the two price bases on overlapping days before splicing.
+    overlap = snap.index.intersection(close.dropna().index)
+    if len(overlap) >= 3:
+        rel = (pd.to_numeric(snap.loc[overlap, "close"], errors="coerce")
+               / close.loc[overlap] - 1.0).abs()
+        if rel.median() > 0.01:
+            print(f"[warn] gap-fill basis differs {rel.median():.1%} median; "
+                  "splice skipped")
+            return close, volume
+
+    print(f"BTC gap-fill: {gap.index.min().date()} -> {gap.index.max().date()} "
+          f"({len(gap)} days from snapshot mirror)")
+    close = pd.concat([close, pd.to_numeric(gap["close"], errors="coerce")])
+    volume = pd.concat([volume, pd.to_numeric(gap["volume"], errors="coerce")])
+    return close.sort_index(), volume.sort_index()
 
 
 def main() -> None:
