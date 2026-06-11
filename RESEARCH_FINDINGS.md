@@ -167,6 +167,31 @@ flat vs BH over the last 12 months and closer to the tripwire's soft leg.
 The trend ensemble is fee-disqualified even at 0.2% (159-408 trades, fees
 442-677% of initial capital, val Sharpe <= PROD+S at every band).
 
+## ROUND: exogenous cross-asset factors (yen carry / ARKK / miner equities)
+
+Hypothesis-first round: BTC's marginal buyers leave footprints in other
+markets first. Tested three mechanisms (loader `src/crossasset.py`; USDJPY
+from the FRED mirror — market-observable at its stamp, so the weekly H.10
+*release* lag is not an information lag; ARKK/QQQ/RIOT/MARA daily closes):
+
+  - **Yen carry stress (jpy_vol_z_90): the best REJECTED factor so far.**
+    Passes everything except the final criterion: gate 2 horizons (score
+    0.234), breadth 4+/0- (broad, not event-fit), extra-lag clean, corr
+    < 0.28 with every incumbent factor (genuinely new information). In the
+    production blend it improves train (1.09 -> 1.32), full-sample MaxDD
+    (-49% -> -38%) and test (1.08/2.17 -> 1.14/2.26, seen only after
+    selection) — but validation-window Sharpe drops 1.47 -> 1.29, and
+    validation Sharpe is the selection criterion every prior adoption used.
+    Changing the rule after seeing the test column would be test-peeking by
+    rule-shopping. NOT adopted; **first in line for re-test after any split
+    roll.**
+  - jpy_mom_60: passes the gate but corr 0.70 with dxy_mom_60 (same
+    dollar-vs-funding-currency family) — excluded as duplication.
+  - ARKK-vs-QQQ speculative appetite: 1 horizon only, breadth 1+/2- — weak,
+    rejected.
+  - Miner-equity relative strength vs BTC (RIOT/MARA): train/val sign flip —
+    the "stock market prices miners ahead of BTC" hypothesis is falsified.
+
 ## ROUND: on-chain behavior factors (SOPR / CVD / whale / miner / basis) — ZERO adopted
 
 Literature sweep pointed at behavior/microstructure data as the remaining

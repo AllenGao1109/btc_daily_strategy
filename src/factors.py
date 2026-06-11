@@ -237,6 +237,28 @@ def build_factors(df: pd.DataFrame) -> pd.DataFrame:
         out["basis_level"] = basis
         out["basis_z_90"] = (basis - basis.rolling(90).mean()) / basis.rolling(90).std()
 
+    # --- cross-asset behavior (exogenous footprints; see src.crossasset) ---
+    if "jpy_usd" in df.columns:  # yen carry: funding-currency trend and stress
+        jpy = df["jpy_usd"].astype(float)
+        out["jpy_mom_60"] = jpy.pct_change(60)
+        jpy_rv = jpy.pct_change().rolling(30).std()
+        out["jpy_vol_z_90"] = (jpy_rv - jpy_rv.rolling(90).mean()) / jpy_rv.rolling(90).std()
+    if "arkk_close" in df.columns and "qqq_close" in df.columns:
+        # Retail speculative-growth appetite: ARKK over QQQ relative strength.
+        arkk = df["arkk_close"].astype(float)
+        qqq = df["qqq_close"].astype(float)
+        out["arkk_rs_20"] = arkk.pct_change(20) - qqq.pct_change(20)
+        out["arkk_rs_60"] = arkk.pct_change(60) - qqq.pct_change(60)
+    if "riot_close" in df.columns and "mara_close" in df.columns:
+        # Miner-equity relative strength vs BTC: the stock market's real-time
+        # pricing of leveraged BTC exposure (exogenous, unlike hash ribbons).
+        miner = (df["riot_close"].astype(float).pct_change(60)
+                 + df["mara_close"].astype(float).pct_change(60)) / 2.0
+        out["miner_rs_60"] = miner - close.pct_change(60)
+        miner20 = (df["riot_close"].astype(float).pct_change(20)
+                   + df["mara_close"].astype(float).pct_change(20)) / 2.0
+        out["miner_rs_20"] = miner20 - close.pct_change(20)
+
     # --- sentiment (only if the columns are present) ---
     # Fear & Greed indexes are 0-100 composites; low = fear. The level tests the
     # contrarian "buy fear / sell greed" hypothesis; z-score and momentum test

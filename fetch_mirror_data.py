@@ -33,6 +33,7 @@ import urllib.request
 
 import pandas as pd
 
+from src.crossasset import load_crossasset
 from src.cryptoquant import load_cme_basis, load_cryptoquant
 from src.data import PROCESSED_DIR, RAW_DIR, clean_data
 from src.macro import load_dxy, load_fred_macro
@@ -98,6 +99,8 @@ def main() -> None:
     print(f"CryptoQuant behavior: {cq.index.min().date()} -> {cq.index.max().date()}")
     cb = load_cme_basis(force_reload=True)
     print(f"CME basis: {cb.index.min().date()} -> {cb.index.max().date()}")
+    ca = load_crossasset(force_reload=True)
+    print(f"Cross-asset (JPY/ARKK/QQQ/miners): {ca.index.min().date()} -> {ca.index.max().date()}")
 
 
 if __name__ == "__main__":
