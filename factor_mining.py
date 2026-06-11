@@ -30,17 +30,8 @@ import numpy as np
 import pandas as pd
 
 from src.config import load_config
-from src.data import load_btc_data
 from src.factors import build_factors, forward_return, information_coefficient
-from src.features import build_features
-from src.macro import load_dxy, load_fred_macro
-from src.onchain import (
-    ONCHAIN_METRICS,
-    load_coinmetrics,
-    load_stablecoin_mcap,
-    merge_onchain,
-)
-from src.sentiment import load_cnn_fear_greed, load_crypto_fear_greed
+from src.research import load_research_frame
 from src.validation import make_fixed_split
 
 HORIZONS = [1, 5, 20]
@@ -68,13 +59,7 @@ def yearly_breadth(
 
 def main():
     cfg = load_config("config.yaml")
-    df = build_features(load_btc_data(cfg))
-    df = merge_onchain(df, load_coinmetrics(ONCHAIN_METRICS))
-    df = merge_onchain(df, load_crypto_fear_greed())
-    df = merge_onchain(df, load_cnn_fear_greed())
-    df = merge_onchain(df, load_stablecoin_mcap())
-    df = merge_onchain(df, load_fred_macro())
-    df = merge_onchain(df, load_dxy())
+    df = load_research_frame(cfg)
     factors = build_factors(df)
     splits = make_fixed_split(cfg["validation"])
     tr_idx = splits["train"].slice(df).index

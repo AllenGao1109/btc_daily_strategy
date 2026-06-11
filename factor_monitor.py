@@ -46,20 +46,9 @@ warnings.filterwarnings("ignore")
 import numpy as np
 import pandas as pd
 
-from src.config import load_config
-from src.data import load_btc_data
+from src.config import BacktestConfig, load_config
 from src.factors import build_factors, forward_return, information_coefficient
-from src.features import build_features
-from src.macro import load_dxy, load_fred_macro
-from src.onchain import (
-    ONCHAIN_METRICS,
-    load_coinmetrics,
-    load_stablecoin_mcap,
-    merge_onchain,
-)
-from src.config import BacktestConfig
-from src.research import run_full
-from src.sentiment import load_cnn_fear_greed, load_crypto_fear_greed
+from src.research import load_research_frame, run_full
 from src.strategies import get_strategy
 from src.strategies.factor_composite import DEFAULT_FACTORS
 from src.validation import make_fixed_split
@@ -82,18 +71,7 @@ def verdict(ic_trval: float, ic_test: float) -> str:
 
 def main() -> None:
     cfg = load_config("config.yaml")
-    df = build_features(load_btc_data(cfg))
-    df = merge_onchain(df, load_coinmetrics(ONCHAIN_METRICS))
-    df = merge_onchain(df, load_crypto_fear_greed())
-    df = merge_onchain(df, load_cnn_fear_greed())
-    df = merge_onchain(df, load_stablecoin_mcap())
-    df = merge_onchain(df, load_fred_macro())
-    df = merge_onchain(df, load_dxy())
-    eth = load_coinmetrics(["PriceUSD"], asset="eth").rename(
-        columns={"PriceUSD": "eth_close"}
-    )
-    df = merge_onchain(df, eth)
-
+    df = load_research_frame(cfg)
     factors = build_factors(df)
     fr = forward_return(df, HORIZON)
     splits = make_fixed_split(cfg["validation"])
@@ -146,10 +124,11 @@ def main() -> None:
 
 
 def composite_edge(df: pd.DataFrame, cfg: dict) -> float:
-    """Trailing-365d Sharpe of the production composite minus buy-and-hold."""
+    """Trailing-365d Sharpe of the PRODUCTION strategy minus buy-and-hold."""
     bt = BacktestConfig.from_config(cfg)
+    name = cfg["strategy"]["name"]
     comp = run_full(
-        df, get_strategy("factor_composite")(df, dict(cfg["strategy"]["params"])), bt
+        df, get_strategy(name)(df, dict(cfg["strategy"]["params"])), bt
     )
     bh = run_full(df, get_strategy("buy_and_hold")(df, {}), bt)
 

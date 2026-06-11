@@ -26,6 +26,38 @@ from .validation import SplitWindow
 SignalBuilder = Callable[[pd.DataFrame], pd.Series]
 
 
+def load_research_frame(config: dict[str, Any]) -> pd.DataFrame:
+    """Load the fully-enriched research frame: OHLCV + features + all merges.
+
+    One canonical place for the data assembly that every research script needs
+    (on-chain, sentiment, stablecoin, macro, DXY, ETH close), so scripts cannot
+    drift apart in what they merge. All merges are causal (ffill of past values
+    via merge_onchain) and the engine still applies the execution lag.
+    """
+    from .data import load_btc_data
+    from .features import build_features
+    from .macro import load_dxy, load_fred_macro
+    from .onchain import (
+        ONCHAIN_METRICS,
+        load_coinmetrics,
+        load_stablecoin_mcap,
+        merge_onchain,
+    )
+    from .sentiment import load_cnn_fear_greed, load_crypto_fear_greed
+
+    df = build_features(load_btc_data(config))
+    df = merge_onchain(df, load_coinmetrics(ONCHAIN_METRICS))
+    df = merge_onchain(df, load_crypto_fear_greed())
+    df = merge_onchain(df, load_cnn_fear_greed())
+    df = merge_onchain(df, load_stablecoin_mcap())
+    df = merge_onchain(df, load_fred_macro())
+    df = merge_onchain(df, load_dxy())
+    eth = load_coinmetrics(["PriceUSD"], asset="eth").rename(
+        columns={"PriceUSD": "eth_close"}
+    )
+    return merge_onchain(df, eth)
+
+
 def run_full(
     df: pd.DataFrame, raw_signal: pd.Series, bt: BacktestConfig
 ) -> pd.DataFrame:

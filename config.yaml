@@ -71,8 +71,17 @@ strategy:
   # contrarian) to DEFAULT_FACTORS. Selected on train+val only (val Sharpe
   # 1.05 -> 1.12); test confirmed afterwards (1.02/2.05 -> 1.04/2.16 on the
   # CoinMetrics-mirror data snapshot). See RESEARCH_FINDINGS.md.
-  name: "factor_composite"
+  # 2026-06 update 2: production is now composite_blend = 0.75 x the composite
+  # + 0.25 x trend_ensemble (strategy-level diversification). Selected on
+  # train+val at fee 0.2% / band 0.20: validation Sharpe 1.47 vs 1.31, best
+  # worst-year (-0.52), FEWER trades than the composite alone (145 vs 167 —
+  # weight averaging nets opposing trades). Test, checked after selection,
+  # agreed: 1.08/2.17 vs 0.97/1.96. Statistical caveat on record (see
+  # RESEARCH_FINDINGS.md): no window's edge over buy-and-hold is statistically
+  # significant; deflated-Sharpe P[skill] 0.13-0.63.
+  name: "composite_blend"
   params:
+    blend: 0.75               # weight on the composite leg (1-x on ensemble)
     train_end: "2021-12-31"   # factor signs use only data <= this (no lookahead)
     horizon: 20
     tilt: 0.5

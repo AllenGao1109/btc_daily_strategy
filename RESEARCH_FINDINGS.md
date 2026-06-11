@@ -167,6 +167,54 @@ flat vs BH over the last 12 months and closer to the tripwire's soft leg.
 The trend ensemble is fee-disqualified even at 0.2% (159-408 trades, fees
 442-677% of initial capital, val Sharpe <= PROD+S at every band).
 
+## Statistical significance of the edge (honest sizing of the claim)
+
+`significance.py` (paired circular block bootstrap, B=10k, fixed seed; plus
+deflated Sharpe over an assumption grid), at the current config:
+
+  - PROD+S vs buy-and-hold Sharpe edge: validation +1.12, 95% CI [+0.01,
+    +2.18] — but validation is the selection window, so this significance is
+    contaminated by construction. The clean windows: **test +0.21, CI
+    [-0.41, +0.84], p(<=0)=0.25; full-sample +0.10, CI [-0.54, +0.69]**.
+    The out-of-sample edge is positive but statistically indistinguishable
+    from zero on ~2.4 years of daily data.
+  - The sentiment factor's marginal (PROD+S vs PROD): not significant in any
+    window; at the current config its test-window contribution is -0.15
+    (val +0.13). Kept by the selection rule; on watch.
+  - Deflated Sharpe of the test result (SR 0.97, skew 0.74, kurt 10):
+    P[true skill] ranges **0.13 (N=1500 trials, wide null) to 0.63 (N=100,
+    tight null)**. After everything this project has tried, the honest
+    statement is: the strategy is *consistent with* skill, not *evidence of*
+    skill.
+
+Every "beats buy-and-hold" claim in this file now carries this caveat. What
+the strategy DOES robustly deliver is the risk profile (test MaxDD -31% to
+-49% vs BH -84% full-sample), which is a portfolio-construction property,
+not a forecasting claim.
+
+## RESULT: strategy-level blend adopted — composite 75% / trend-ensemble 25%
+
+With factor mining exhausted, the remaining diversification was at the
+strategy layer. Blending RAW target weights (engine trades the netted blend)
+of the two mechanically different survivors, selected on train+val only at
+fee 0.2% / band 0.20:
+
+| blend          | validation  | tv-mean | minYr | trades | test (after) |
+|----------------|-------------|---------|-------|--------|--------------|
+| composite only | 1.31 / 2.15 | 1.32    | -0.88 | 167    | 0.97 / 1.96  |
+| **C75/E25**    | **1.47 / 2.32** | 1.37 | -0.52 | **145** | **1.08 / 2.17** |
+| C50/E50        | 1.21 / 1.97 | 1.15    | -1.91 | 164    | 0.96 / 1.97  |
+| any BH blend   | <= 0.88     |         |       |        |              |
+
+C75/E25 improves validation, worst-year AND trade count simultaneously —
+weight averaging nets opposing trades, so the diversification is better than
+free. Test (checked after selection) agrees: 1.08/2.17. Adopted as production
+(`composite_blend`, blend=0.75). BH-containing blends die on 2022 validation.
+The significance caveats above apply unchanged — the blend's improvement over
+the composite alone is well inside the bootstrap noise band; the adoption
+rationale is the selection rule + the diversification prior + lower turnover,
+not a significance claim.
+
 ## Standing tools: breadth gate + adopted-factor decay monitor
 
 Implemented the two process fixes from the round above:
