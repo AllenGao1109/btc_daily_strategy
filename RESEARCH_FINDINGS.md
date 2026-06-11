@@ -163,11 +163,24 @@ Implemented the two process fixes from the round above:
     the strength of the holders + IC-weighting + vol targeting, but the
     factor base is eroding in the post-ETF regime.
 
-Open decision (owner-level, not taken unilaterally): rolling the validation
-split forward (e.g. train<=2023, validate on 2024-25) would let us re-select
-factors for the new regime, but it consumes the current test window as
-selection data — after that, only 2026+ remains as genuinely untouched
-out-of-sample. Defer until the flags persist for another re-run or two.
+DECISION (2026-06, delegated to and taken by the research agent): **HOLD —
+do not roll the split.** Evidence: the composite's edge is diluted, not dead.
+Trailing-365d Sharpe edge over buy-and-hold across the test window: mean
++0.06, currently **+0.18**, never below -0.26; test MaxDD -31% vs BH -49%;
+in the 2026 drawdown the composite is losing materially less (-0.42 vs
+-0.60 trailing Sharpe) — the downside-protection profile it was selected
+for is delivering. Rolling now would consume 2024-25 and leave only ~5
+months of clean out-of-sample. Factor-IC fatigue alone does not justify
+that trade.
+
+To keep this from becoming indefinite discretion, the roll condition is
+PRE-REGISTERED in `factor_monitor.py` (decided while ahead, not in a
+drawdown panic):
+  ROLL if trailing-365d Sharpe edge < -0.30, or edge < 0 with >=5 factors
+  flagged — on two monitor runs >= 60 days apart (run log committed at
+  results/factor_monitor_log.csv). Until it fires, no "what would 2024-25
+  select" analysis is run at all — looking is consuming.
+First run: edge +0.18, 5/9 flags -> HOLD.
 
 ## How the lead was built: factor mining (deterministic)
 
