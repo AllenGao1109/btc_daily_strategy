@@ -71,7 +71,9 @@ def load_btc_data(
         if raw_path.exists() and not force_reload:
             df = _read_cache(raw_path)
         else:
-            if source == "cryptocompare":
+            if source == "coinbase":
+                df = _download_coinbase(symbol, start_date)
+            elif source == "cryptocompare":
                 df = _download_cryptocompare(symbol, start_date)
             else:
                 df = _download_ccxt(exchange, symbol, timeframe, start_date)
@@ -186,6 +188,16 @@ def enrich_external(df: pd.DataFrame, cache_dir: Path | None = None,
     cache_dir.mkdir(parents=True, exist_ok=True)
     path = cache_dir / "external.csv"
 
+    # Auto-refresh if the cache is stale (its newest row lags the BTC calendar by
+    # more than 2 days) so the daily job always emails current macro/sentiment.
+    if path.exists() and not force_reload:
+        try:
+            cached = _read_cache(path)
+            if (df.index.max() - cached.index.max()) > pd.Timedelta(days=2):
+                force_reload = True
+        except Exception:
+            force_reload = True
+
     if path.exists() and not force_reload:
         ext = _read_cache(path)
     else:
@@ -250,11 +262,72 @@ def load_okx_funding(index: pd.DatetimeIndex) -> pd.Series:
     return daily.reindex(index).rename("funding")
 
 
+def _download_coinbase(
+    symbol: str, start_date: str | None, *, granularity: int = 86400
+) -> pd.DataFrame:
+    """Download OHLCV from Coinbase Exchange (keyless, paginated, stdlib only).
+
+    Coinbase's public candles endpoint returns up to 300 candles per request as
+    ``[time, low, high, open, close, volume]`` (newest first). We page backward via
+    the ``start``/``end`` window until ``start_date`` is reached. Used as the
+    primary source after CryptoCompare's free tier began requiring an API key.
+
+    Args:
+        symbol: Pair like ``"BTC/USD"`` -> product ``BTC-USD``.
+        start_date: Earliest date to fetch (ISO) or None for ~max history.
+        granularity: Candle size in seconds (86400 daily, 3600 hourly).
+
+    Returns:
+        Raw OHLCV DataFrame indexed by a UTC DatetimeIndex.
+    """
+    import json
+    import time as _time
+    import urllib.request
+
+    product = symbol.replace("/", "-")
+    start_ts = int(pd.Timestamp(start_date, tz="UTC").timestamp()) if start_date else 0
+    now = pd.Timestamp.utcnow().tz_localize(None)
+    end = pd.Timestamp.utcnow().tz_convert(None) if now.tzinfo else pd.Timestamp.utcnow()
+    end = pd.Timestamp(end).tz_localize("UTC") if pd.Timestamp(end).tzinfo is None else end
+    span = pd.Timedelta(seconds=granularity * 300)
+
+    rows: list[list] = []
+    for _ in range(400):  # backstop
+        start = end - span
+        url = (
+            f"https://api.exchange.coinbase.com/products/{product}/candles"
+            f"?granularity={granularity}"
+            f"&start={start.strftime('%Y-%m-%dT%H:%M:%SZ')}"
+            f"&end={end.strftime('%Y-%m-%dT%H:%M:%SZ')}"
+        )
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
+                batch = json.loads(resp.read().decode("utf-8"))
+        except Exception:  # pragma: no cover - network
+            break
+        if not batch:
+            break
+        rows.extend(batch)
+        oldest = min(c[0] for c in batch)
+        if oldest <= start_ts:
+            break
+        end = pd.Timestamp(oldest - 1, unit="s", tz="UTC")
+        _time.sleep(0.12)  # be gentle on the public endpoint
+
+    df = pd.DataFrame(rows, columns=["time", "low", "high", "open", "close", "volume"])
+    df["date"] = pd.to_datetime(df["time"], unit="s", utc=True)
+    df = df[["date", "open", "high", "low", "close", "volume"]].set_index("date")
+    df = df[df["close"] > 0]
+    df = df[~df.index.duplicated(keep="first")].sort_index()
+    return df
+
+
 def load_eth_close(index: pd.DatetimeIndex, start_date: str = "2016-01-01") -> pd.Series:
     """Load ETH daily close aligned to ``index`` (for cross-crypto factors).
 
-    Uses the same keyless CryptoCompare source as BTC. Forward-filled onto the BTC
-    calendar; introduces no lookahead (only past ETH closes are used downstream).
+    Sourced from Coinbase (ETH-USD), forward-filled onto the BTC calendar; only
+    past ETH closes are used downstream, so no lookahead.
 
     Args:
         index: BTC DatetimeIndex to align to.
@@ -263,7 +336,7 @@ def load_eth_close(index: pd.DatetimeIndex, start_date: str = "2016-01-01") -> p
     Returns:
         Series named ``eth_close`` indexed like ``index``.
     """
-    eth = _download_cryptocompare("ETH/USD", start_date)["close"]
+    eth = _download_coinbase("ETH/USD", start_date)["close"]
     return eth.reindex(index).ffill().rename("eth_close")
 
 
@@ -291,7 +364,7 @@ def load_btc_hourly(
     if path.exists() and not force_reload:
         df = _read_cache(path)
     else:
-        df = _download_cryptocompare(symbol, start_date, frequency="hour")
+        df = _download_coinbase(symbol, start_date, granularity=3600)
         df.to_csv(path)
     df = _slice_dates(df, start_date, None)
     # Light validation: positive prices, sorted, unique.

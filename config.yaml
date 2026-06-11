@@ -1,5 +1,5 @@
 data:
-  source: "cryptocompare"
+  source: "coinbase"
   exchange: "coinbase"
   symbol: "BTC/USD"
   timeframe: "1d"
