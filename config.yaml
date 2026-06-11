@@ -9,7 +9,10 @@ data:
 
 portfolio:
   initial_capital: 10000
-  fee_rate: 0.005
+  # 2026-06: owner lowered the fee assumption 0.5% -> 0.2% per side (closer to
+  # spot taker tiers; still conservative vs perp maker/taker). The band below
+  # was re-selected for this fee level.
+  fee_rate: 0.002
   slippage_rate: 0.0
   cash_return: 0.0
 
@@ -26,13 +29,17 @@ backtest:
   rebalance_policy: "signal_change_or_risk_control"
   leverage_breach_action: "delever_next_day"
   stop_trading_if_equity_zero: true
-  # No-trade band. Raised 0.20 -> 0.30 to cut turnover/fees (0.5% per trade is
-  # steep) without sacrificing risk control: ~44% fewer trades and ~35% lower
-  # fees, the best validation Sharpe (0.91), drawdown held (~-51% full sample),
-  # and out-of-sample it beats buy-and-hold on both Sharpe and NAV at much lower
-  # drawdown. (0.40 cut more fees but blew full-sample drawdown out to -67%.)
-  # Chosen by the fee prior + validation, not by peeking at test.
-  weight_band: 0.30
+  # No-trade band. At fee 0.5% the band was 0.30 (see git history). With the
+  # fee lowered to 0.2% the turnover penalty halves and the 2026-06 grid
+  # (bands 0.30/0.20/0.10 x strategies, selection on train+val only) picks
+  # 0.20 back: best validation Sharpe (1.31 vs 1.15 at 0.30), tv-mean 1.32,
+  # worst-year -0.88, full-sample MaxDD -47%. 0.10 had a higher tv-mean (1.39)
+  # but lower validation Sharpe and ~3x the trades — the (weakened) fee prior
+  # breaks the tie toward 0.20. Test, checked only after selection: 0.97/1.96,
+  # beats buy-and-hold on both. Caveat on record: the 0.30 variant's test was
+  # higher (1.07/2.22) — the 2024-26 window keeps rewarding slower trading;
+  # tracked by factor_monitor, not acted on (that would be test-peeking).
+  weight_band: 0.20
 
 funding:
   enabled: true

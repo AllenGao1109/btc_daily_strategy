@@ -144,6 +144,29 @@ Monitoring note: even adopted factors show 2024-25 decay (cnnfg_z_60 test-
 window IC +0.08 vs -0.20 in val; 2026 back to -0.17). Re-run the yearly-IC
 diagnostic as test years accumulate.
 
+## CONFIG CHANGE (owner, 2026-06): fee 0.5% -> 0.2%; band re-selected to 0.20
+
+With the fee assumption halved-plus (0.5% -> 0.2% per side, closer to real
+spot taker tiers), the no-trade band was re-selected on train+val only
+(grid: bands 0.30/0.20/0.10 x {BH, ENS, PROD, PROD+S} at fee 0.002):
+
+| band | strat  | validation  | tv-mean | trades | test (after selection) |
+|------|--------|-------------|---------|--------|------------------------|
+| 0.30 | PROD+S | 1.15 / 1.90 | 1.06    | 84     | 1.07 / 2.22            |
+| 0.20 | PROD+S | **1.31 / 2.15** | 1.32 | 167    | **0.97 / 1.96** (selected) |
+| 0.10 | PROD+S | 1.25 / 2.06 | 1.39    | 457    | 1.02 / 2.06            |
+
+Selection: 0.20 band (best validation Sharpe; 0.10's higher tv-mean loses the
+fee-prior tie-break at ~3x the trades). Test confirms the selected config
+beats buy-and-hold on both Sharpe and NAV (0.97/1.96 vs 0.76/1.81). On
+record: 0.30's test (1.07/2.22) was again higher — the 2024-26 window keeps
+rewarding slower trading. Acting on that observation would be test-peeking;
+instead it is visible in the monitor: under the new config the trailing-365d
+edge reads +0.00 (vs +0.18 for the old config), i.e. the selected config is
+flat vs BH over the last 12 months and closer to the tripwire's soft leg.
+The trend ensemble is fee-disqualified even at 0.2% (159-408 trades, fees
+442-677% of initial capital, val Sharpe <= PROD+S at every band).
+
 ## Standing tools: breadth gate + adopted-factor decay monitor
 
 Implemented the two process fixes from the round above:
