@@ -51,8 +51,10 @@ MACRO_SERIES = [
     "DFII10",        # 10y TIPS real yield (H.15, released t+1)
     "BAMLH0A0HYM2",  # ICE BofA HY OAS (released t+1)
     "RRPONTSYD",     # ON RRP take-up (same-day, ~17:15 UTC)
+    "USEPUINDXD",    # news-based Economic Policy Uncertainty (computed from
+                     # day-t newspapers, available t+1 -> release-lagged)
 ]
-RELEASE_LAGGED = ["DGS10", "DGS2", "T10Y2Y", "DFII10", "BAMLH0A0HYM2"]
+RELEASE_LAGGED = ["DGS10", "DGS2", "T10Y2Y", "DFII10", "BAMLH0A0HYM2", "USEPUINDXD"]
 
 
 def _fetch(url: str, timeout: int = 60) -> bytes:

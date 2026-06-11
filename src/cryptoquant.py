@@ -79,6 +79,23 @@ CRYPTOQUANT_SERIES: dict[str, tuple[str, str]] = {
         "Bitcoin Miner to Exchange Flow (Total) - All Miners, All Exchanges - Day.csv",
         "Miner to Exchange Flow (Total)",
     ),
+    "cb_premium": (  # Coinbase vs global spot gap: US institutional demand
+        "CryptoQuant/BTC/Fund Data/Bitcoin Coinbase Premium Index - Day.csv",
+        "Coinbase Premium Index",
+    ),
+    "kr_premium": (  # Upbit vs global spot gap: Korean retail demand (2020-07+)
+        "CryptoQuant/BTC/Fund Data/Bitcoin Korea Premium Index - Day.csv",
+        "Korea Premium Index",
+    ),
+    "funding_rate": (  # aggregated perp funding: leveraged-long crowding
+        "CryptoQuant/BTC/Derivatives/Bitcoin Funding Rates - All Exchanges - Day.csv",
+        "Funding Rates",
+    ),
+    "est_leverage": (  # open interest / exchange reserve: system leverage
+        "CryptoQuant/BTC/Derivatives/"
+        "Bitcoin Estimated Leverage Ratio - All Exchanges - Day.csv",
+        "Estimated Leverage Ratio",
+    ),
 }
 
 CME_BASIS_PATH = "Tradingview/Daily/CME_BTC_futures_over_SPOT_BTC_ratio__daily.csv"

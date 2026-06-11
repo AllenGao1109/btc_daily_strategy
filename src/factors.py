@@ -236,6 +236,25 @@ def build_factors(df: pd.DataFrame) -> pd.DataFrame:
         basis = df["cme_basis"].astype(float)
         out["basis_level"] = basis
         out["basis_z_90"] = (basis - basis.rolling(90).mean()) / basis.rolling(90).std()
+    if "cb_premium" in df.columns:  # US (Coinbase) demand vs global spot
+        cbp = df["cb_premium"].astype(float)
+        out["cbprem_30"] = cbp.rolling(30).mean()
+        out["cbprem_z_90"] = (cbp - cbp.rolling(90).mean()) / cbp.rolling(90).std()
+    if "kr_premium" in df.columns:  # Korean retail demand (short history: 2020-07+)
+        krp = df["kr_premium"].astype(float)
+        out["krprem_z_90"] = (krp - krp.rolling(90).mean()) / krp.rolling(90).std()
+    if "funding_rate" in df.columns:  # perp leveraged-long crowding
+        fnd = df["funding_rate"].astype(float)
+        out["fund_30"] = fnd.rolling(30).mean()
+        out["fund_z_90"] = (fnd - fnd.rolling(90).mean()) / fnd.rolling(90).std()
+    if "est_leverage" in df.columns:  # system leverage (OI / exchange reserve)
+        elr = df["est_leverage"].astype(float)
+        out["elr_z_180"] = (elr - elr.rolling(180).mean()) / elr.rolling(180).std()
+    if "USEPUINDXD" in df.columns:  # news-based policy uncertainty (vs priced fear)
+        epu = df["USEPUINDXD"].astype(float)
+        epu_sm = epu.rolling(7).mean()  # the daily series is extremely noisy
+        out["epu_z_60"] = (epu_sm - epu_sm.rolling(60).mean()) / epu_sm.rolling(60).std()
+        out["epu_mom_20"] = epu_sm.diff(20)
 
     # --- cross-asset behavior (exogenous footprints; see src.crossasset) ---
     if "jpy_usd" in df.columns:  # yen carry: funding-currency trend and stress

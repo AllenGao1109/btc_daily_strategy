@@ -167,6 +167,36 @@ flat vs BH over the last 12 months and closer to the tripwire's soft leg.
 The trend ensemble is fee-disqualified even at 0.2% (159-408 trades, fees
 442-677% of initial capital, val Sharpe <= PROD+S at every band).
 
+## ROUND: leverage / premia / funding / EPU — zero adopted; ELR is the new IC champion
+
+Four new channels (CryptoQuant Fund Data + Derivatives, plus the EPU series
+already sitting in our FRED mirror, now release-lag-restamped and tested):
+
+  - **est_leverage z (elr_z_180, OI/exchange-reserve): the highest IC score
+    in the 107-factor library (0.430, 3 horizons, breadth 4+/0-, lag-clean,
+    negative sign = deleveraging risk)** — and STILL rejected by the
+    composite marginal: validation 1.36 vs 1.47, test would have collapsed
+    (0.81/1.69). It is a RISK factor, not a return factor: it cuts
+    full-sample MaxDD -49% -> -31%. On record as the pre-registered
+    candidate if the owner ever switches to a drawdown-constrained
+    objective (+ELR+EPU: val 1.43, tv-mean 1.44, MaxDD -29%).
+  - epu_z_60 (news-based policy uncertainty, 1985+): passes the gate
+    (2 horizons, 4+/0-, positive sign) — the third exogenous gate-passer
+    after cnnfg and the yen family. Marginal: val 1.37 < 1.47, rejected.
+  - **Funding rate (finally tested** — the round-1 backlog item, full
+    history 2016+ via the CryptoQuant aggregate): level factor sign-flips
+    train/val, z-score only 1 horizon. FAILED. The oldest hypothesis on the
+    books is now closed.
+  - Coinbase premium (2017+): 1 horizon, breadth 2+/3- — fails. Korea
+    premium (2020-07+, short-train caveat): fails outright.
+
+Meta-conclusion after 4 hypothesis rounds (15+ mechanisms, 3 gate-passing
+exogenous families, 0 adoptions): the incumbent blend's validation Sharpe
+(1.47) is a fortress — top-decile standalone ICs add nothing because the
+9-factor composite + trend-ensemble blend already spans the return
+information in free daily data. What remains addressable at this frequency
+is risk-shaping (ELR), not return selection.
+
 ## ROUND: "AAPL = value, BTC = froth" ratio (owner hypothesis) — rejected, instructively
 
 Tested the owner-sourced hypothesis that the BTC/AAPL ratio reads "what the
