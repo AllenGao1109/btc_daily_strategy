@@ -34,6 +34,7 @@ def load_research_frame(config: dict[str, Any]) -> pd.DataFrame:
     drift apart in what they merge. All merges are causal (ffill of past values
     via merge_onchain) and the engine still applies the execution lag.
     """
+    from .cryptoquant import load_cme_basis, load_cryptoquant
     from .data import load_btc_data
     from .features import build_features
     from .macro import load_dxy, load_fred_macro
@@ -52,6 +53,8 @@ def load_research_frame(config: dict[str, Any]) -> pd.DataFrame:
     df = merge_onchain(df, load_stablecoin_mcap())
     df = merge_onchain(df, load_fred_macro())
     df = merge_onchain(df, load_dxy())
+    df = merge_onchain(df, load_cryptoquant())
+    df = merge_onchain(df, load_cme_basis())
     eth = load_coinmetrics(["PriceUSD"], asset="eth").rename(
         columns={"PriceUSD": "eth_close"}
     )

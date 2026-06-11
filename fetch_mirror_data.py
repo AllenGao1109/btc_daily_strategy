@@ -33,6 +33,7 @@ import urllib.request
 
 import pandas as pd
 
+from src.cryptoquant import load_cme_basis, load_cryptoquant
 from src.data import PROCESSED_DIR, RAW_DIR, clean_data
 from src.macro import load_dxy, load_fred_macro
 from src.onchain import (
@@ -93,6 +94,10 @@ def main() -> None:
     print(f"FRED macro: {fred.index.min().date()} -> {fred.index.max().date()}")
     dxy = load_dxy(force_reload=True)
     print(f"DXY: {dxy.index.min().date()} -> {dxy.index.max().date()}")
+    cq = load_cryptoquant(force_reload=True)
+    print(f"CryptoQuant behavior: {cq.index.min().date()} -> {cq.index.max().date()}")
+    cb = load_cme_basis(force_reload=True)
+    print(f"CME basis: {cb.index.min().date()} -> {cb.index.max().date()}")
 
 
 if __name__ == "__main__":

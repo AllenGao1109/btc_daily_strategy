@@ -90,6 +90,16 @@ def main():
         sup, opp = yearly_breadth(f, fr20, sign20)
         rec["yr_support"] = sup
         rec["yr_oppose"] = opp
+        # EXTRA-LAG leakage check: same window ICs with the factor delayed one
+        # MORE day. A real, slow signal survives; an IC that collapses was
+        # living off borderline same-day information (publication-lag leak).
+        f1 = f.shift(1)
+        rec["ic_tr_h20_x1"] = round(
+            information_coefficient(f1.loc[tr_idx], fr20.loc[tr_idx]), 4
+        )
+        rec["ic_va_h20_x1"] = round(
+            information_coefficient(f1.loc[va_idx], fr20.loc[va_idx]), 4
+        )
         rows.append(rec)
 
     table = pd.DataFrame(rows).sort_values(
@@ -108,6 +118,22 @@ def main():
         print(f"{r['factor']:22s} {int(r['n_robust_h']):3d} {r['robust_score']:6.3f} | "
               f"{r['ic_tr_h5']:8.3f} {r['ic_va_h5']:8.3f} | {r['ic_tr_h20']:9.3f} {r['ic_va_h20']:9.3f}"
               f" | {breadth:6s}{note}")
+
+    # Extra-lag table for everything that passed the window gate.
+    passed = table[table["n_robust_h"] > 0]
+    print("\n=== extra-lag leakage check (h20 IC with factor delayed +1 day) ===")
+    print(f"{'factor':22s} {'tr':>7s} {'tr_x1':>7s} {'va':>7s} {'va_x1':>7s}  flag")
+    for _, r in passed.iterrows():
+        flags = []
+        for win in ("tr", "va"):
+            ic0, ic1 = r[f"ic_{win}_h20"], r[f"ic_{win}_h20_x1"]
+            if abs(ic0) >= ROBUST_IC and (
+                np.sign(ic1) != np.sign(ic0) or abs(ic1) < 0.5 * abs(ic0)
+            ):
+                flags.append(win)
+        mark = f"LEAK? ({','.join(flags)})" if flags else "ok"
+        print(f"{r['factor']:22s} {r['ic_tr_h20']:7.3f} {r['ic_tr_h20_x1']:7.3f} "
+              f"{r['ic_va_h20']:7.3f} {r['ic_va_h20_x1']:7.3f}  {mark}")
 
 
 if __name__ == "__main__":

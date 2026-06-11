@@ -203,6 +203,40 @@ def build_factors(df: pd.DataFrame) -> pd.DataFrame:
     if "dxy_close" in df.columns:
         out["dxy_mom_60"] = df["dxy_close"].astype(float).pct_change(60)
 
+    # --- on-chain behavior (CryptoQuant archive; see src.cryptoquant for the
+    # timing/leakage audit: these must also pass the extra-lag check) ---
+    if "asopr" in df.columns:  # realized profit ratio of moved coins
+        asopr = df["asopr"].astype(float)
+        out["asopr_30"] = asopr.rolling(30).mean() - 1.0
+        out["asopr_z_90"] = (asopr - asopr.rolling(90).mean()) / asopr.rolling(90).std()
+    if "sth_sopr" in df.columns:  # short-term holders' realized P/L (capitulation)
+        sth = df["sth_sopr"].astype(float)
+        out["sth_sopr_30"] = sth.rolling(30).mean() - 1.0
+        out["sth_sopr_z_90"] = (sth - sth.rolling(90).mean()) / sth.rolling(90).std()
+    if "lth_sopr" in df.columns:  # old-coin profit taking (cycle distribution)
+        lth = df["lth_sopr"].astype(float)
+        out["lth_sopr_z_365"] = (lth - lth.rolling(365, min_periods=180).mean()) / lth.rolling(
+            365, min_periods=180
+        ).std()
+    if "taker_cvd" in df.columns:  # 90d cumulative taker buy-sell delta (order flow)
+        cvd = df["taker_cvd"].astype(float)
+        out["cvd_chg_30"] = cvd.diff(30)
+        out["cvd_z_180"] = (cvd - cvd.rolling(180).mean()) / cvd.rolling(180).std()
+    if "whale_ratio" in df.columns:  # top-10 inflows / total inflows (who is selling)
+        wr = df["whale_ratio"].astype(float)
+        out["whale_90"] = wr.rolling(90).mean()
+        out["whale_z_180"] = (wr - wr.rolling(180).mean()) / wr.rolling(180).std()
+    if "inflow_cdd" in df.columns:  # coin-age destroyed by exchange inflows (old coins selling)
+        icdd = np.log1p(df["inflow_cdd"].astype(float))
+        out["icdd_z_180"] = (icdd - icdd.rolling(180).mean()) / icdd.rolling(180).std()
+    if "miner_to_ex" in df.columns:  # miner selling pressure (direct, unlike hash ribbons)
+        m2e = np.log1p(df["miner_to_ex"].astype(float))
+        out["m2e_z_180"] = (m2e - m2e.rolling(180).mean()) / m2e.rolling(180).std()
+    if "cme_basis" in df.columns:  # futures carry / institutional positioning
+        basis = df["cme_basis"].astype(float)
+        out["basis_level"] = basis
+        out["basis_z_90"] = (basis - basis.rolling(90).mean()) / basis.rolling(90).std()
+
     # --- sentiment (only if the columns are present) ---
     # Fear & Greed indexes are 0-100 composites; low = fear. The level tests the
     # contrarian "buy fear / sell greed" hypothesis; z-score and momentum test

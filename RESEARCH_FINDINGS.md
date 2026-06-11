@@ -167,6 +167,45 @@ flat vs BH over the last 12 months and closer to the tripwire's soft leg.
 The trend ensemble is fee-disqualified even at 0.2% (159-408 trades, fees
 442-677% of initial capital, val Sharpe <= PROD+S at every band).
 
+## ROUND: on-chain behavior factors (SOPR / CVD / whale / miner / basis) — ZERO adopted
+
+Literature sweep pointed at behavior/microstructure data as the remaining
+free, untested dimension. New source: CryptoQuant CSV archive + CME basis
+(public research-repo mirror, all series with pre-2022 coverage; loader
+`src/cryptoquant.py`, 12 new factors, 88 total). Leakage controls added for
+this round and now permanent:
+  - EXTRA-LAG check in factor_mining: every gate-passing factor's h20 IC is
+    recomputed with one additional day of lag; a collapse (>50% drop or sign
+    flip) flags publication-timing leakage. This round: all 35 gate-passers
+    clean — none lives off borderline same-day information.
+  - Documented vendor-revision caveat: entity-based series (whale, miner,
+    exchange flows) are recomputed with today's wallet labels, biasing
+    historical ICs optimistically. (The two failures below make the point
+    moot here.)
+
+Gate results: lth_sopr_z_365 PASSES strongly (3 horizons, score 0.281, 3rd
+overall; slow-cycle breadth profile like halving/MVRV), cvd_chg_30 passes
+(2 horizons, breadth 3+/1-). btc_dominance_mom passes but is the same
+mechanism as the adopted btc_eth_rs_30 (corr ~1) — excluded as family
+duplication. FAILED: whale ratio (train/val mismatch), miner-to-exchange
+flow (dead), aSOPR level, CME basis (negligible IC).
+
+Composite marginals (selection on train+val, production blend):
+  - +lth_sopr_z_365: validation COLLAPSES 1.47 -> 1.05, worst-year -0.52 ->
+    -1.85. Cause: corr 0.79 with mvrv_z_365 double-weights the valuation
+    family, and its positive sign leans into late-cycle distribution — 2022
+    punishes it. A factor can have top-3 standalone IC and still be net
+    harmful inside the composite.
+  - +cvd_chg_30: no marginal value (val 1.40 vs 1.47; corr 0.61 with mom_20
+    — the order-flow information is already priced into the momentum block).
+
+**DEFAULT_FACTORS unchanged.** Two rounds in a row the layered pipeline
+(IC gate -> breadth -> extra-lag -> composite marginal on train+val) has
+correctly rejected everything; standalone factor IC without mechanism
+novelty is not enough. Remaining untested-for-coverage reasons: NUPL/Puell/
+dormancy families, DVOL, stablecoin exchange ratio, ETF flows (all start
+2020-12+; parked until a split roll).
+
 ## Statistical significance of the edge (honest sizing of the claim)
 
 `significance.py` (paired circular block bootstrap, B=10k, fixed seed; plus
