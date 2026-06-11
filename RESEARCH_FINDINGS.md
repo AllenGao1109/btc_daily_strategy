@@ -82,6 +82,25 @@ Consistent improvement across all three windows with *fewer* trades —
     CryptoCompare snapshot (1.02/2.05 vs the 0.98/2.00 in config.yaml notes)
     but the comparison is internally consistent.
 
+Band sensitivity (0.20 vs the production 0.30 no-trade band, same snapshot):
+
+| band | strat  | train       | validation  | test        | trades | fees%cap | maxDD | worst yr |
+|------|--------|-------------|-------------|-------------|--------|----------|-------|----------|
+| 0.30 | PROD   | 0.96 / 4.37 | 1.05 / 1.79 | 1.02 / 2.05 | 86     | 96%      | -53%  | -1.57    |
+| 0.30 | PROD+S | 0.98 / 4.66 | 1.12 / 1.85 | 1.04 / 2.16 | 84     | 113%     | -56%  | -1.54    |
+| 0.20 | PROD   | 1.12 / 5.34 | 1.14 / 1.87 | 1.07 / 2.10 | 160    | 177%     | -40%  | -1.53    |
+| 0.20 | PROD+S | 1.09 / 5.20 | 1.27 / 2.09 | 0.92 / 1.88 | 167    | 186%     | -47%  | -0.94    |
+
+At 0.20 the sentiment composite posts the best validation (1.27/2.09), the
+best worst-year (2022: -0.94 — the contrarian equity-sentiment de-risking
+bites harder with a tighter band) and the best mean-yearly Sharpe (0.91), but
+test softens to 0.92/1.88 (still beats BH on both) at double the turnover.
+Keeping band 0.30: the fee prior (0.5%/trade) is an a-priori reason to prefer
+half the trades, and test agrees afterwards. PROD+S beats BH on Sharpe AND NAV
+at BOTH bands — the sentiment conclusion is not band-sensitive. The 0.20+S
+configuration is the designated alternate if the fee assumption ever drops
+(e.g. 0.1% maker-taker), on the strength of its worst-year/consistency profile.
+
 ## How the lead was built: factor mining (deterministic)
 
 Pivoting from "more models on the same features" to MINING NEW FACTORS found the
