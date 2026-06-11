@@ -47,6 +47,15 @@ TV_SERIES = {
     "smh_close": "SMH_vaneck_semiconductor_etf__daily.csv",
 }
 
+# AAPL split-adjusted close (yfinance dump archived on GitHub, 2009 -> late
+# 2025). Used for the owner's "AAPL = value anchor, BTC = froth" ratio factor.
+# MUST be the adjusted series: the 2020-08 4:1 split would otherwise inject a
+# fake -75% jump into the ratio.
+AAPL_URL = (
+    "https://raw.githubusercontent.com/stellatezz/credit-risk-ews/main/"
+    "data/raw/yfinance_AAPL.csv"
+)
+
 
 def _fetch(url: str, timeout: int = 120) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": "btc-research/1.0"})
@@ -93,6 +102,14 @@ def load_crossasset(
             name=name,
         )
         cols[name] = s[~s.index.duplicated(keep="first")].sort_index()
+
+    aapl_raw = pd.read_csv(io.BytesIO(_fetch(AAPL_URL)))
+    aapl = pd.Series(
+        pd.to_numeric(aapl_raw["adj_close"], errors="coerce").values,
+        index=pd.to_datetime(aapl_raw["date"], utc=True).dt.normalize(),
+        name="aapl_close",
+    )
+    cols["aapl_close"] = aapl[~aapl.index.duplicated(keep="first")].sort_index()
 
     df = pd.DataFrame(cols).dropna(how="all")
     if df.empty:

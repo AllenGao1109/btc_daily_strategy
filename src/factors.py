@@ -266,6 +266,16 @@ def build_factors(df: pd.DataFrame) -> pd.DataFrame:
         # Semiconductor cycle vs broad tech: liquidity/growth-beta appetite.
         out["smh_rs_60"] = (df["smh_close"].astype(float).pct_change(60)
                             - df["qqq_close"].astype(float).pct_change(60))
+    if "aapl_close" in df.columns:
+        # Owner hypothesis: AAPL = value anchor, BTC = froth. The log-ratio's
+        # stretch vs its own 1y history reads "what the market pays for froth
+        # over cash flows"; the 60d version is the rotation/trend reading.
+        aapl = df["aapl_close"].astype(float)
+        lr = np.log(close / aapl)
+        out["btc_aapl_z_365"] = (lr - lr.rolling(365, min_periods=180).mean()) / lr.rolling(
+            365, min_periods=180
+        ).std()
+        out["btc_aapl_rs_60"] = close.pct_change(60) - aapl.pct_change(60)
 
     # --- sentiment (only if the columns are present) ---
     # Fear & Greed indexes are 0-100 composites; low = fear. The level tests the

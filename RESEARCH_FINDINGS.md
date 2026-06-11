@@ -167,6 +167,26 @@ flat vs BH over the last 12 months and closer to the tripwire's soft leg.
 The trend ensemble is fee-disqualified even at 0.2% (159-408 trades, fees
 442-677% of initial capital, val Sharpe <= PROD+S at every band).
 
+## ROUND: "AAPL = value, BTC = froth" ratio (owner hypothesis) — rejected, instructively
+
+Tested the owner-sourced hypothesis that the BTC/AAPL ratio reads "what the
+market pays for froth over cash flows". Data: split-adjusted AAPL closes
+(yfinance archive, 2009 -> 2025-12; the 2020 4:1 split makes UNadjusted
+prices unusable for ratios). Factors: btc_aapl_z_365 (1y stretch of the log
+ratio), btc_aapl_rs_60 (60d relative momentum).
+
+  - btc_aapl_z_365 PASSES the IC gate (h5+h20, extra-lag clean) — but with a
+    POSITIVE window sign (froth persists) while the yearly breadth is 0+/3-
+    (within years, stretch mean-reverts). Same level-vs-timing duality as
+    mvrv_z_365; eligible for the marginal test under the slow-cycle defense.
+  - Marginal verdict: validation 1.47 -> 1.34, worst-year -0.52 -> -1.07.
+    REJECTED. Post-mortem: corr 0.74-0.79 with mvrv_z_365, dist_from_ath AND
+    mom_120 — BTC's volatility (~70% ann.) dwarfs AAPL's (~25%), so the ratio's
+    variance is almost entirely BTC's own stretch; the "value anchor"
+    denominator barely moves the needle. The hypothesis collapses into the
+    existing BTC-stretch family rather than adding an exogenous reading.
+    (btc_aapl_rs_60: 1 horizon only, not taken further.)
+
 ## ROUND: credit / gold / semiconductors — all fail at the gate
 
 Hypothesis batch #2 of the exogenous-factor campaign (the 2022-23 validation

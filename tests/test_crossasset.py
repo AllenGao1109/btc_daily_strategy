@@ -36,10 +36,11 @@ def test_crossasset_factors_gated_and_causal():
     df["mara_close"] = 3 * np.exp(np.cumsum(rng.normal(0, 0.03, n)))
     df["gld_close"] = 150 * np.exp(np.cumsum(rng.normal(0, 0.008, n)))
     df["smh_close"] = 100 * np.exp(np.cumsum(rng.normal(0, 0.015, n)))
+    df["aapl_close"] = 180 * np.exp(np.cumsum(rng.normal(0, 0.012, n)))
     full = build_factors(df)
     cols = ["jpy_mom_60", "jpy_vol_z_90", "arkk_rs_20", "arkk_rs_60",
             "miner_rs_20", "miner_rs_60", "gld_mom_60", "btc_gld_rs_60",
-            "smh_rs_60"]
+            "smh_rs_60", "btc_aapl_z_365", "btc_aapl_rs_60"]
     assert set(cols) <= set(full.columns)
 
     trunc = build_factors(df.iloc[:180])
