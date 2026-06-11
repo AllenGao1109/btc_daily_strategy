@@ -167,6 +167,27 @@ flat vs BH over the last 12 months and closer to the tripwire's soft leg.
 The trend ensemble is fee-disqualified even at 0.2% (159-408 trades, fees
 442-677% of initial capital, val Sharpe <= PROD+S at every band).
 
+## EXPLORATION: enabling shorts — rejected by the rule, queued for the split roll
+
+Owner question: why is production long/flat? Answer in three layers: the
+ENGINE fully supports shorts (-2x, borrow costs, liquidation accounting);
+the COMPOSITE leg's mapping (tilt 0.5 + score, clipped at 0) makes shorts a
+near-no-op (17 short days if unclipped — it is a long-conviction score by
+construction); the TREND-ENSEMBLE leg is where shorts actually bind
+(620 short days with allow_short).
+
+Short-enabled blend (ensemble leg LS) vs production, same overlay/costs:
+train 1.53 vs 1.29, test 1.15/1.93 vs 1.06/1.91, full-sample MaxDD -29% vs
+-49%, 2026-ytd +1.76 vs -0.27 (it is short the current bear) — but
+validation 1.56 vs 1.64: the 2022-23 window punishes trend shorts whipsawed
+in the 2023 bear-to-bull turn. By the selection rule the incumbent stays;
+adopting because of 2026 (test data) would be peeking. This is the FOURTH
+"validation says no, every other window says yes" tension (band 0.30,
+jpy_vol, ELR-as-factor, shorts) — all rooted in the regime composition of
+the 2022-23 validation window. Short-enabled ensemble joins jpy_vol_z_90,
+epu_z_60 and the short-history factors at the FRONT of the re-test queue
+for any future split roll.
+
 ## RESULT: ELR de-leveraging OVERLAY adopted — risk factors enter through the risk door
 
 Follow-up to the round below: elr_z_180 was rejected as a *return* factor
