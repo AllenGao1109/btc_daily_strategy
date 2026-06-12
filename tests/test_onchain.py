@@ -44,3 +44,17 @@ def test_mvrv_trend_runs_and_respects_bounds():
     res = run_backtest(df, raw, 10000, fee_rate=0.005)
     assert res["target_weight"].between(-2.0, 2.0).all()
     assert not res["liquidated"].any()
+
+
+def test_merge_onchain_ffill_limit_expires_stale_values():
+    price = make_df([100] * 8, start="2020-01-01")
+    oc = pd.DataFrame(
+        {"est_leverage": [0.2]}, index=pd.to_datetime(["2020-01-02"], utc=True)
+    )
+    oc.index.name = "date"
+    merged = merge_onchain(price, oc, ffill_limit=3)
+    # Carried for exactly 3 days past the stamp, NaN afterwards.
+    assert merged.loc["2020-01-05", "est_leverage"] == 0.2
+    assert pd.isna(merged.loc["2020-01-06", "est_leverage"])
+    # Unlimited default still carries indefinitely.
+    assert merge_onchain(price, oc).loc["2020-01-08", "est_leverage"] == 0.2

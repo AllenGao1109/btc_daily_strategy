@@ -56,7 +56,11 @@ def load_research_frame(config: dict[str, Any]) -> pd.DataFrame:
     # Full-history HY OAS overrides the short panel column (merged after it).
     df = merge_onchain(df, load_hy_oas())
     df = merge_onchain(df, load_dxy())
-    df = merge_onchain(df, load_cryptoquant())
+    # CryptoQuant comes from a STATIC archive snapshot that can go stale.
+    # Cap forward-fill at 14 days: beyond that the columns turn NaN, which
+    # auto-disables the ELR overlay (multiplier -> 1) and blanks the family's
+    # factors instead of acting on expired readings.
+    df = merge_onchain(df, load_cryptoquant(), ffill_limit=14)
     df = merge_onchain(df, load_cme_basis())
     df = merge_onchain(df, load_crossasset())
     eth = load_coinmetrics(["PriceUSD"], asset="eth").rename(

@@ -199,7 +199,9 @@ def load_stablecoin_mcap(
     return out
 
 
-def merge_onchain(df: pd.DataFrame, onchain: pd.DataFrame) -> pd.DataFrame:
+def merge_onchain(
+    df: pd.DataFrame, onchain: pd.DataFrame, *, ffill_limit: int | None = None
+) -> pd.DataFrame:
     """Left-join on-chain columns onto a price frame, forward-filling gaps.
 
     On-chain metrics can lag a day or have occasional gaps; forward-filling
@@ -208,12 +210,16 @@ def merge_onchain(df: pd.DataFrame, onchain: pd.DataFrame) -> pd.DataFrame:
     Args:
         df: Price/feature frame (UTC DatetimeIndex).
         onchain: On-chain frame to merge in.
+        ffill_limit: Maximum days a value may be carried forward (None =
+            unlimited). Use a limit for sources that can go stale (static
+            archives): beyond it values become NaN so downstream consumers
+            degrade gracefully instead of acting on expired readings.
 
     Returns:
         A copy of ``df`` with on-chain columns added (ffilled).
     """
     out = df.copy()
-    joined = onchain.reindex(out.index.union(onchain.index)).ffill()
+    joined = onchain.reindex(out.index.union(onchain.index)).ffill(limit=ffill_limit)
     for col in onchain.columns:
         out[col] = joined[col].reindex(out.index)
     return out
