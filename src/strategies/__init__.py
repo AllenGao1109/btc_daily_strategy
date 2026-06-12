@@ -14,6 +14,7 @@ import pandas as pd
 from . import (
     buy_and_hold,
     cash,
+    composite_blend,
     donchian_breakout,
     factor_composite,
     leveraged_buy_and_hold,
@@ -41,6 +42,7 @@ STRATEGY_REGISTRY: dict[str, SignalFn] = {
     "trend_ensemble": trend_ensemble.generate_signals,
     "mvrv_trend": mvrv_trend.generate_signals,
     "factor_composite": factor_composite.generate_signals,
+    "composite_blend": composite_blend.generate_signals,
 }
 
 

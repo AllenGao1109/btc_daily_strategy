@@ -13,8 +13,9 @@ BTC long/short/leveraged strategies.
 - Computes timing-correct features and applies an explicit 1-day execution lag
   so day `t` positions only use information available through day `t-1`.
 - Runs a stateful long/short/leveraged backtest engine with proper transaction
-  costs (0.5% on traded notional only), leverage drift tracking, leverage-breach
-  handling, optional funding/borrow costs, and equity-zero liquidation.
+  costs (0.2% on traded notional only; configurable), leverage drift tracking,
+  leverage-breach handling, optional funding/borrow costs, and equity-zero
+  liquidation.
 - Computes a full metric suite and generates a markdown report plus charts,
   comparing every strategy against cash, buy-and-hold 1x/2x, and SMA baselines.
 
@@ -36,6 +37,19 @@ installed or you are offline, you can:
 - place your own OHLCV CSV in `data/raw/BTC-USD_1d.csv`, or
 - run with deterministic synthetic data via `--synthetic` (for testing only —
   this is **not** real market data).
+
+Enrichment data (best-effort; strategies degrade gracefully without it):
+
+- on-chain metrics — CoinMetrics community API, with an automatic fallback to
+  CoinMetrics' daily GitHub CSV dump (`src/onchain.py`);
+- sentiment — alternative.me crypto Fear & Greed and the CNN equity Fear &
+  Greed archive (`src/sentiment.py`);
+- if the market-data APIs are blocked entirely (restricted networks), run
+  `python3 fetch_mirror_data.py` to bootstrap every `data/raw` cache from
+  public GitHub mirrors. Note: that path synthesizes OHLC from daily closes
+  (open = previous close; high/low collapse to the close range) — fine for the
+  close-based engine and factors, but Donchian channels degrade to close-based
+  channels. The script's docstring documents this.
 
 ## How to run the backtest
 
@@ -85,9 +99,10 @@ The report is generated automatically by `run_backtest`. It is written to
   `daily_target_rebalance` rebalances to target every day (and pays drift fees).
 
 ### Transaction costs
-- `fee = abs(target_exposure_notional - previous_exposure_notional) * 0.005`.
-  Charged only on traded notional, never on the full portfolio, never on hold
-  days. A `+2.0 -> -2.0` flip is a 4x-turnover trade.
+- `fee = abs(target_exposure_notional - previous_exposure_notional) * fee_rate`
+  with `fee_rate = 0.002` (0.2% per side; 0.5% before 2026-06). Charged only on
+  traded notional, never on the full portfolio, never on hold days. A
+  `+2.0 -> -2.0` flip is a 4x-turnover trade.
 
 ### Funding / borrow costs
 - Configurable daily rates, **default 0.0**. When 0.0, financing is effectively

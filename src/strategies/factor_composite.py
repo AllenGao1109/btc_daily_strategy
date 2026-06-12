@@ -25,6 +25,10 @@ DEFAULT_FACTORS = [
     "halving_cos", "kurt_30", "vol_regime", "mvrv_z_365",
     "mom_120", "mvrv_mom_30", "ex_netflow_to_mcap",
     "btc_eth_rs_30",  # BTC relative strength vs ETH — the factor that cleared BH
+    # CNN equity Fear & Greed z-score (contrarian cross-asset risk appetite).
+    # Robust IC on all horizons in factor_mining; selected on train+val only
+    # (val Sharpe 1.05 -> 1.12 vs the prior set), see RESEARCH_FINDINGS.md.
+    "cnnfg_z_60",
 ]
 
 

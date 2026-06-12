@@ -33,9 +33,9 @@ leverage can drift with price and must be detected/handled, not ignored.
 Alternative: `daily_target_rebalance` (rebalances daily, pays drift fees).
 
 ## 4. Transaction Costs
-`fee_rate = 0.005`, applied to traded notional only.
-`turnover = abs(target_weight - actual_weight_before)`;
-`traded_notional = turnover * equity_before_trade`; `fee = traded_notional * 0.005`.
+`fee_rate = 0.002` (owner decision 2026-06; originally 0.005), applied to
+traded notional only. `turnover = abs(target_weight - actual_weight_before)`;
+`traded_notional = turnover * equity_before_trade`; `fee = traded_notional * fee_rate`.
 No fee on unchanged positions. A `+2 -> -2` flip is 4x turnover. Main reported
 performance includes fees.
 

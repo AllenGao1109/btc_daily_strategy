@@ -114,6 +114,16 @@ def run_all(
             feat_df["eth_close"] = data_mod.load_eth_close(feat_df.index)
         except Exception as exc:  # noqa: BLE001 - enrichment is optional
             print(f"[warn] on-chain/cross-asset enrichment skipped: {exc}")
+        try:
+            from . import sentiment as sentiment_mod
+            feat_df = onchain_mod.merge_onchain(
+                feat_df, sentiment_mod.load_crypto_fear_greed()
+            )
+            feat_df = onchain_mod.merge_onchain(
+                feat_df, sentiment_mod.load_cnn_fear_greed()
+            )
+        except Exception as exc:  # noqa: BLE001 - enrichment is optional
+            print(f"[warn] sentiment enrichment skipped: {exc}")
 
     strategies_to_run = list(dict.fromkeys([*BENCHMARKS, primary]))
     results: dict[str, pd.DataFrame] = {}

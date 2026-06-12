@@ -39,6 +39,461 @@ Caveat: full-sample total return trails BH because vol-targeting gives up the
 2017-2021 bull; the win is out-of-sample (the deployment-relevant window) and on
 risk-adjusted terms throughout.
 
+## RESULT: CNN equity Fear & Greed improves the composite; crypto F&G does not
+
+Tested the two sentiment indexes (this answers the "different data regime"
+hypothesis below — sentiment was the predicted next frontier):
+  - **alternative.me crypto Fear & Greed** (0-100 daily, 2018-02+)
+  - **CNN Business equity Fear & Greed** (0-100 US trading days, 2011+), as a
+    cross-asset risk-appetite proxy
+
+Factor mining verdict (IC stability on train+val, test never used):
+  - **`cnnfg_z_60` (CNN F&G 60d z-score) is robust on ALL 3 horizons** with a
+    consistently NEGATIVE IC (h20: train -0.13 / val -0.20) — i.e. contrarian:
+    stretched-high equity sentiment precedes weak BTC returns. It ranks 3rd of
+    54 factors, behind only halving_cos and vol_regime, and it is *exogenous*
+    (not derived from BTC price), hence orthogonal to the price/on-chain block.
+  - **Every crypto F&G factor failed robustness** (train/val sign flips). As
+    suspected, the crypto index is built largely from BTC price/volatility, so
+    it adds nothing beyond the existing price factors.
+
+Adding `cnnfg_z_60` to the production `factor_composite` (selection on
+train+val only: val Sharpe 1.05 -> 1.12, train+val-years mean 0.98 -> 1.03;
+test checked only afterwards):
+
+| window (this data snapshot)   | PROD   | PROD + cnnfg_z_60 |
+|-------------------------------|--------|-------------------|
+| train Sharpe / NAV            | 0.96 / 4.37 | 0.98 / 4.66  |
+| validation Sharpe / NAV       | 1.05 / 1.79 | 1.12 / 1.85  |
+| test (2024-26) Sharpe / NAV   | 1.02 / 2.05 | **1.04 / 2.16** |
+| trades                        | 86     | 84                |
+
+Consistent improvement across all three windows with *fewer* trades —
+`cnnfg_z_60` is now in `DEFAULT_FACTORS`. Caveats:
+  - CNN history is community-archived (whit3rabbit/fear-greed-data splices the
+    2011-2021 archive with the live CNN endpoint); pre-2021 values are a
+    reconstruction.
+  - The BTC-equity correlation regime that powers this factor is post-2020;
+    monitor per-year IC for decay.
+  - Crypto F&G archive ends ~2026-04 in this environment (API blocked); the
+    last weeks are forward-filled. Irrelevant to the verdict (factor rejected).
+  - This round ran on CoinMetrics mirror prices with synthesized OHLC (see
+    `fetch_mirror_data.py`); PROD baseline numbers shift slightly vs the
+    CryptoCompare snapshot (1.02/2.05 vs the 0.98/2.00 in config.yaml notes)
+    but the comparison is internally consistent.
+
+Band sensitivity (0.20 vs the production 0.30 no-trade band, same snapshot):
+
+| band | strat  | train       | validation  | test        | trades | fees%cap | maxDD | worst yr |
+|------|--------|-------------|-------------|-------------|--------|----------|-------|----------|
+| 0.30 | PROD   | 0.96 / 4.37 | 1.05 / 1.79 | 1.02 / 2.05 | 86     | 96%      | -53%  | -1.57    |
+| 0.30 | PROD+S | 0.98 / 4.66 | 1.12 / 1.85 | 1.04 / 2.16 | 84     | 113%     | -56%  | -1.54    |
+| 0.20 | PROD   | 1.12 / 5.34 | 1.14 / 1.87 | 1.07 / 2.10 | 160    | 177%     | -40%  | -1.53    |
+| 0.20 | PROD+S | 1.09 / 5.20 | 1.27 / 2.09 | 0.92 / 1.88 | 167    | 186%     | -47%  | -0.94    |
+
+At 0.20 the sentiment composite posts the best validation (1.27/2.09), the
+best worst-year (2022: -0.94 — the contrarian equity-sentiment de-risking
+bites harder with a tighter band) and the best mean-yearly Sharpe (0.91), but
+test softens to 0.92/1.88 (still beats BH on both) at double the turnover.
+Keeping band 0.30: the fee prior (0.5%/trade) is an a-priori reason to prefer
+half the trades, and test agrees afterwards. PROD+S beats BH on Sharpe AND NAV
+at BOTH bands — the sentiment conclusion is not band-sensitive. The 0.20+S
+configuration is the designated alternate if the fee assumption ever drops
+(e.g. 0.1% maker-taker), on the strength of its worst-year/consistency profile.
+
+## ROUND: miner / exchange-supply / stablecoin / macro factors — ZERO adopted
+
+Mined four new free, industry-recognized factor families (73 factors total now,
+26 pass the train+val IC gate). Loaders: `src/macro.py` (FRED + DXY, with
+release-lag re-stamping — H.15 yields and HY OAS are published t+1 and get an
+extra day of lag to avoid a ~21h leak), `load_stablecoin_mcap` (USDT+USDC),
+ONCHAIN_METRICS extended with HashRate/IssTotUSD/SplyExNtv/SplyCur.
+
+IC-gate results (train+val sign stability):
+  - PASSED: exsply_ratio (3H, score 0.283 — 2nd best overall), exsply_z_180
+    (3H), stable_growth_30/90, dgs10_chg_60, rrp_chg_30, exsply_chg_30.
+  - FAILED: hash ribbons, Puell multiple (famous, but val sign flips), SSR,
+    VIX level/z, 10y-2y curve, DXY momentum (1H only).
+  - NOT TESTABLE: HY OAS — the mirror archive only covers 2023+, zero train
+    coverage. (NUPL was skipped a priori: 1 - 1/MVRV is a monotonic transform
+    of MVRV, identical Spearman IC.)
+
+Composite marginals looked spectacular on the selectable windows — every
+passing factor lifted validation Sharpe (1.12 -> up to 1.49) and repaired the
+2022 worst-year (-1.54 -> as good as +0.40). **All of it was 2022-23 regime
+fitting.** The factor-level OOS diagnostic (h20 IC, computed for reporting
+only, after deciding not to swap the default) showed every candidate's sign
+FLIPS in 2024-26:
+
+| factor            | train 17-21 | val 22-23 | test 24-26 |
+|-------------------|-------------|-----------|------------|
+| exsply_ratio      | -0.14       | -0.35     | **+0.19**  |
+| stable_growth_30  | +0.21       | +0.22     | **-0.11**  |
+| dgs10_chg_60      | -0.08       | -0.17     | **+0.11**  |
+| rrp_chg_30        | -0.10       | -0.24     | +0.02      |
+
+Economic post-mortem: all four key off 2022 events (hiking cycle, Terra/FTX).
+The exchange-supply story structurally broke in the ETF era — since 2024-01,
+coins leaving exchanges flow into ETF custodians, inverting the old
+"self-custody = bullish" reading. Verdict: **DEFAULT_FACTORS unchanged.**
+The lesson compounds the ML one: an IC gate on train+val windows is necessary
+but not sufficient when train+val contains one dominant macro regime; prefer
+factors whose yearly IC is broad-based, not event-concentrated.
+
+Monitoring note: even adopted factors show 2024-25 decay (cnnfg_z_60 test-
+window IC +0.08 vs -0.20 in val; 2026 back to -0.17). Re-run the yearly-IC
+diagnostic as test years accumulate.
+
+## CONFIG CHANGE (owner, 2026-06): fee 0.5% -> 0.2%; band re-selected to 0.20
+
+With the fee assumption halved-plus (0.5% -> 0.2% per side, closer to real
+spot taker tiers), the no-trade band was re-selected on train+val only
+(grid: bands 0.30/0.20/0.10 x {BH, ENS, PROD, PROD+S} at fee 0.002):
+
+| band | strat  | validation  | tv-mean | trades | test (after selection) |
+|------|--------|-------------|---------|--------|------------------------|
+| 0.30 | PROD+S | 1.15 / 1.90 | 1.06    | 84     | 1.07 / 2.22            |
+| 0.20 | PROD+S | **1.31 / 2.15** | 1.32 | 167    | **0.97 / 1.96** (selected) |
+| 0.10 | PROD+S | 1.25 / 2.06 | 1.39    | 457    | 1.02 / 2.06            |
+
+Selection: 0.20 band (best validation Sharpe; 0.10's higher tv-mean loses the
+fee-prior tie-break at ~3x the trades). Test confirms the selected config
+beats buy-and-hold on both Sharpe and NAV (0.97/1.96 vs 0.76/1.81). On
+record: 0.30's test (1.07/2.22) was again higher — the 2024-26 window keeps
+rewarding slower trading. Acting on that observation would be test-peeking;
+instead it is visible in the monitor: under the new config the trailing-365d
+edge reads +0.00 (vs +0.18 for the old config), i.e. the selected config is
+flat vs BH over the last 12 months and closer to the tripwire's soft leg.
+The trend ensemble is fee-disqualified even at 0.2% (159-408 trades, fees
+442-677% of initial capital, val Sharpe <= PROD+S at every band).
+
+## EXPLORATION: enabling shorts — rejected by the rule, queued for the split roll
+
+Owner question: why is production long/flat? Answer in three layers: the
+ENGINE fully supports shorts (-2x, borrow costs, liquidation accounting);
+the COMPOSITE leg's mapping (tilt 0.5 + score, clipped at 0) makes shorts a
+near-no-op (17 short days if unclipped — it is a long-conviction score by
+construction); the TREND-ENSEMBLE leg is where shorts actually bind
+(620 short days with allow_short).
+
+Short-enabled blend (ensemble leg LS) vs production, same overlay/costs:
+train 1.53 vs 1.29, test 1.15/1.93 vs 1.06/1.91, full-sample MaxDD -29% vs
+-49%, 2026-ytd +1.76 vs -0.27 (it is short the current bear) — but
+validation 1.56 vs 1.64: the 2022-23 window punishes trend shorts whipsawed
+in the 2023 bear-to-bull turn. By the selection rule the incumbent stays;
+adopting because of 2026 (test data) would be peeking. This is the FOURTH
+"validation says no, every other window says yes" tension (band 0.30,
+jpy_vol, ELR-as-factor, shorts) — all rooted in the regime composition of
+the 2022-23 validation window. Short-enabled ensemble joins jpy_vol_z_90,
+epu_z_60 and the short-history factors at the FRONT of the re-test queue
+for any future split roll.
+
+## DECISION (owner, 2026-06): shorts ENABLED in production
+
+Owner decision, recorded as such (like the fee change — a spec/risk
+preference, not a statistical adoption; spec section 1 always allowed
+long/flat/short). Shorts bind in the trend-ensemble leg
+(``allow_short: true`` in config). On data through 2026-06-10:
+
+| strat               | train       | validation  | test        | fullDD | minYr | 2026 |
+|---------------------|-------------|-------------|-------------|--------|-------|------|
+| PROD long/short     | 1.45 / 8.10 | 1.40 / 2.05 | **1.26 / 2.36** | **-31%** | **-0.33** | +2.41 |
+| ref long/flat       | 1.09 / 5.24 | **1.47 / 2.32** | 1.05 / 2.13 | -49%   | -0.88 | -0.88 |
+| buy-and-hold        | 1.36 / 46.5 | 0.19 / 0.91 | 0.56 / 1.46 | -84%   | -1.36 | —    |
+
+The honest ledger: validation still prefers long/flat (1.47 vs 1.40 — the
+2023 bear-to-bull whipsaw), and that is the risk the owner accepts; every
+other panel favors shorts (train, test, full-sample MaxDD nearly halved,
+best worst-year on record, trailing edge vs BH +1.57). Current stance:
+net short -0.13x, being covered as extreme-fear signals lift the composite
+leg. Caveats on record: short borrow cost is 0.0 in config (known
+optimism); the long/flat variant remains one flag away for comparison.
+
+## DECISION (owner, 2026-06): ELR overlay REMOVED from production — operational, not statistical
+
+The only free ELR source is a static archive frozen at 2026-04-10; keeping it
+fresh requires either a paid feed (CryptoQuant Professional ~$99/mo) or ~6
+months of self-collected OI/reserve proxy data. A production model must not
+depend on a feed we cannot sustain, so `elr_overlay: false` in config. The
+overlay code stays implemented, tested and validated — re-enable when a
+sustainable feed exists.
+
+Re-analysis on the gap-filled data (price through 2026-06-10, which now
+includes the early-June ~-20% crash):
+
+| strat              | validation  | test        | trades | fullDD | trailing edge |
+|--------------------|-------------|-------------|--------|--------|---------------|
+| PROD (no overlay)  | 1.47 / 2.32 | **1.05 / 2.13** | 145 | -49%   | **+0.35**     |
+| ref: with overlay  | 1.64 / 2.47 | 1.00 / 1.85 | 177    | -49%   |               |
+| buy-and-hold       | 0.19 / 0.91 | 0.56 / 1.46 | 1      | -84%   |               |
+
+Removal gives up the validation gain (1.64 -> 1.47) but on the test window —
+now extended through the June crash — the no-overlay variant is actually
+AHEAD (1.05/2.13 vs 1.00/1.85): the overlay's test-period contribution did
+not survive fresher data. Current guidance is unchanged (signal +0.29x, held
++0.26x, HOLD) because the staleness guard had already neutralized the
+overlay in the recent tail. The trailing-365d edge over BH reads +0.35, the
+healthiest reading on record — the crash demonstrated the core blend's
+downside protection on its own.
+
+## RESULT: ELR de-leveraging OVERLAY adopted — risk factors enter through the risk door
+
+Follow-up to the round below: elr_z_180 was rejected as a *return* factor
+(composite marginal), so it was re-tested in its mechanically correct role —
+a position overlay that scales exposure down when system leverage stretches
+(`risk_shaping.py`; mult = clip(1 - k*max(0, z-z0), floor, 1)). Selection
+pre-registered on train+val over a 2x2 (z0, k) grid:
+
+| variant            | val Sharpe | val MaxDD | val Calmar | test (after) |
+|--------------------|-----------|-----------|------------|--------------|
+| blend (incumbent)  | 1.47      | -25%      | 2.10       | 1.08 / 2.17 / -26% |
+| **OV z0=.5 k=.5**  | **1.64**  | **-17%**  | **3.37**   | 1.06 / 1.91 / -20% |
+| (other 3 corners)  | 1.52-1.64 | -17..-23% | 2.42-2.86  | all viable   |
+
+Every grid corner improves validation Sharpe — not a knife-edge. The winner
+beats the incumbent on the PRODUCTION objective itself (val Sharpe 1.47 ->
+1.64), so this is a standard adoption, not an objective switch; tie-break
+(fewer trades) picked z0=0.5/k=0.5 over z0=1.0/k=0.5. Test, read after
+selection: Sharpe flat (1.06 vs 1.08), test MaxDD -26% -> -20%, NAV 2.17 ->
+1.91 — the risk improvement is real and the give-back in upside is the
+insurance premium. Significance caveats apply as everywhere.
+
+Lesson worth keeping: the factor pipeline's verdict "no marginal return
+value" does not mean "no value" — IC sign quality and composite membership
+test RETURN information, while ELR carries RISK-TIMING information. The
+right architecture question for any strong-IC reject is "selection factor or
+sizing factor?". (Monitor note: trailing edge under the new production
+config reads +0.08, HOLD; monthly automation now runs via
+.github/workflows/monitor.yml.)
+
+## ROUND: leverage / premia / funding / EPU — zero adopted; ELR is the new IC champion
+
+Four new channels (CryptoQuant Fund Data + Derivatives, plus the EPU series
+already sitting in our FRED mirror, now release-lag-restamped and tested):
+
+  - **est_leverage z (elr_z_180, OI/exchange-reserve): the highest IC score
+    in the 107-factor library (0.430, 3 horizons, breadth 4+/0-, lag-clean,
+    negative sign = deleveraging risk)** — and STILL rejected by the
+    composite marginal: validation 1.36 vs 1.47, test would have collapsed
+    (0.81/1.69). It is a RISK factor, not a return factor: it cuts
+    full-sample MaxDD -49% -> -31%. On record as the pre-registered
+    candidate if the owner ever switches to a drawdown-constrained
+    objective (+ELR+EPU: val 1.43, tv-mean 1.44, MaxDD -29%).
+  - epu_z_60 (news-based policy uncertainty, 1985+): passes the gate
+    (2 horizons, 4+/0-, positive sign) — the third exogenous gate-passer
+    after cnnfg and the yen family. Marginal: val 1.37 < 1.47, rejected.
+  - **Funding rate (finally tested** — the round-1 backlog item, full
+    history 2016+ via the CryptoQuant aggregate): level factor sign-flips
+    train/val, z-score only 1 horizon. FAILED. The oldest hypothesis on the
+    books is now closed.
+  - Coinbase premium (2017+): 1 horizon, breadth 2+/3- — fails. Korea
+    premium (2020-07+, short-train caveat): fails outright.
+
+Meta-conclusion after 4 hypothesis rounds (15+ mechanisms, 3 gate-passing
+exogenous families, 0 adoptions): the incumbent blend's validation Sharpe
+(1.47) is a fortress — top-decile standalone ICs add nothing because the
+9-factor composite + trend-ensemble blend already spans the return
+information in free daily data. What remains addressable at this frequency
+is risk-shaping (ELR), not return selection.
+
+## ROUND: "AAPL = value, BTC = froth" ratio (owner hypothesis) — rejected, instructively
+
+Tested the owner-sourced hypothesis that the BTC/AAPL ratio reads "what the
+market pays for froth over cash flows". Data: split-adjusted AAPL closes
+(yfinance archive, 2009 -> 2025-12; the 2020 4:1 split makes UNadjusted
+prices unusable for ratios). Factors: btc_aapl_z_365 (1y stretch of the log
+ratio), btc_aapl_rs_60 (60d relative momentum).
+
+  - btc_aapl_z_365 PASSES the IC gate (h5+h20, extra-lag clean) — but with a
+    POSITIVE window sign (froth persists) while the yearly breadth is 0+/3-
+    (within years, stretch mean-reverts). Same level-vs-timing duality as
+    mvrv_z_365; eligible for the marginal test under the slow-cycle defense.
+  - Marginal verdict: validation 1.47 -> 1.34, worst-year -0.52 -> -1.07.
+    REJECTED. Post-mortem: corr 0.74-0.79 with mvrv_z_365, dist_from_ath AND
+    mom_120 — BTC's volatility (~70% ann.) dwarfs AAPL's (~25%), so the ratio's
+    variance is almost entirely BTC's own stretch; the "value anchor"
+    denominator barely moves the needle. The hypothesis collapses into the
+    existing BTC-stretch family rather than adding an exogenous reading.
+    (btc_aapl_rs_60: 1 horizon only, not taken further.)
+
+## ROUND: credit / gold / semiconductors — all fail at the gate
+
+Hypothesis batch #2 of the exogenous-factor campaign (the 2022-23 validation
+window was a RATES-vol crisis, so credit and real-asset rotation seemed like
+the right fear gauges). Full-history HY OAS restored via an archive mirror
+(`load_hy_oas`, 1996+, release-lag adjusted) — closing the earlier
+"not testable" gap with a definitive verdict:
+
+  - **HY credit spread (hyoas_z_60 / chg_20): train/val SIGN FLIP** (h20:
+    -0.10 train vs +0.15 val). Credit-risk appetite did not translate across
+    crypto regimes. Previously "untestable", now tested and FAILED.
+  - **Gold momentum / BTC-gold relative strength: sign flips too** (gld_mom
+    -0.20 train vs +0.15 val). The debasement-rotation story does not survive
+    the gate.
+  - smh_rs_60 (semis vs QQQ): 1 horizon only, breadth 2+/2- — below the
+    >=2-horizon bar every adopted factor met; not taken to the marginal test
+    (no exceptions, that is multiplicity discipline).
+  - MOVE index (the *right* vol for 2022): ICE-proprietary, no free
+    full-history archive found — genuinely unavailable, not untested-by-laziness.
+
+Exogenous campaign scoreboard after two hypothesis batches (yen carry /
+ARKK / miner equities / gold / credit / semis): 8 mechanisms tested, 2 gate
+passes (yen family), 0 adoptions. The owner's CNN Fear & Greed remains the
+only adopted exogenous factor. The bar that keeps rejecting candidates is
+not the IC gate — it is (a) family duplication against 9 incumbents and
+(b) the validation-Sharpe marginal in the composite. Both are working as
+designed.
+
+## ROUND: exogenous cross-asset factors (yen carry / ARKK / miner equities)
+
+Hypothesis-first round: BTC's marginal buyers leave footprints in other
+markets first. Tested three mechanisms (loader `src/crossasset.py`; USDJPY
+from the FRED mirror — market-observable at its stamp, so the weekly H.10
+*release* lag is not an information lag; ARKK/QQQ/RIOT/MARA daily closes):
+
+  - **Yen carry stress (jpy_vol_z_90): the best REJECTED factor so far.**
+    Passes everything except the final criterion: gate 2 horizons (score
+    0.234), breadth 4+/0- (broad, not event-fit), extra-lag clean, corr
+    < 0.28 with every incumbent factor (genuinely new information). In the
+    production blend it improves train (1.09 -> 1.32), full-sample MaxDD
+    (-49% -> -38%) and test (1.08/2.17 -> 1.14/2.26, seen only after
+    selection) — but validation-window Sharpe drops 1.47 -> 1.29, and
+    validation Sharpe is the selection criterion every prior adoption used.
+    Changing the rule after seeing the test column would be test-peeking by
+    rule-shopping. NOT adopted; **first in line for re-test after any split
+    roll.**
+  - jpy_mom_60: passes the gate but corr 0.70 with dxy_mom_60 (same
+    dollar-vs-funding-currency family) — excluded as duplication.
+  - ARKK-vs-QQQ speculative appetite: 1 horizon only, breadth 1+/2- — weak,
+    rejected.
+  - Miner-equity relative strength vs BTC (RIOT/MARA): train/val sign flip —
+    the "stock market prices miners ahead of BTC" hypothesis is falsified.
+
+## ROUND: on-chain behavior factors (SOPR / CVD / whale / miner / basis) — ZERO adopted
+
+Literature sweep pointed at behavior/microstructure data as the remaining
+free, untested dimension. New source: CryptoQuant CSV archive + CME basis
+(public research-repo mirror, all series with pre-2022 coverage; loader
+`src/cryptoquant.py`, 12 new factors, 88 total). Leakage controls added for
+this round and now permanent:
+  - EXTRA-LAG check in factor_mining: every gate-passing factor's h20 IC is
+    recomputed with one additional day of lag; a collapse (>50% drop or sign
+    flip) flags publication-timing leakage. This round: all 35 gate-passers
+    clean — none lives off borderline same-day information.
+  - Documented vendor-revision caveat: entity-based series (whale, miner,
+    exchange flows) are recomputed with today's wallet labels, biasing
+    historical ICs optimistically. (The two failures below make the point
+    moot here.)
+
+Gate results: lth_sopr_z_365 PASSES strongly (3 horizons, score 0.281, 3rd
+overall; slow-cycle breadth profile like halving/MVRV), cvd_chg_30 passes
+(2 horizons, breadth 3+/1-). btc_dominance_mom passes but is the same
+mechanism as the adopted btc_eth_rs_30 (corr ~1) — excluded as family
+duplication. FAILED: whale ratio (train/val mismatch), miner-to-exchange
+flow (dead), aSOPR level, CME basis (negligible IC).
+
+Composite marginals (selection on train+val, production blend):
+  - +lth_sopr_z_365: validation COLLAPSES 1.47 -> 1.05, worst-year -0.52 ->
+    -1.85. Cause: corr 0.79 with mvrv_z_365 double-weights the valuation
+    family, and its positive sign leans into late-cycle distribution — 2022
+    punishes it. A factor can have top-3 standalone IC and still be net
+    harmful inside the composite.
+  - +cvd_chg_30: no marginal value (val 1.40 vs 1.47; corr 0.61 with mom_20
+    — the order-flow information is already priced into the momentum block).
+
+**DEFAULT_FACTORS unchanged.** Two rounds in a row the layered pipeline
+(IC gate -> breadth -> extra-lag -> composite marginal on train+val) has
+correctly rejected everything; standalone factor IC without mechanism
+novelty is not enough. Remaining untested-for-coverage reasons: NUPL/Puell/
+dormancy families, DVOL, stablecoin exchange ratio, ETF flows (all start
+2020-12+; parked until a split roll).
+
+## Statistical significance of the edge (honest sizing of the claim)
+
+`significance.py` (paired circular block bootstrap, B=10k, fixed seed; plus
+deflated Sharpe over an assumption grid), at the current config:
+
+  - PROD+S vs buy-and-hold Sharpe edge: validation +1.12, 95% CI [+0.01,
+    +2.18] — but validation is the selection window, so this significance is
+    contaminated by construction. The clean windows: **test +0.21, CI
+    [-0.41, +0.84], p(<=0)=0.25; full-sample +0.10, CI [-0.54, +0.69]**.
+    The out-of-sample edge is positive but statistically indistinguishable
+    from zero on ~2.4 years of daily data.
+  - The sentiment factor's marginal (PROD+S vs PROD): not significant in any
+    window; at the current config its test-window contribution is -0.15
+    (val +0.13). Kept by the selection rule; on watch.
+  - Deflated Sharpe of the test result (SR 0.97, skew 0.74, kurt 10):
+    P[true skill] ranges **0.13 (N=1500 trials, wide null) to 0.63 (N=100,
+    tight null)**. After everything this project has tried, the honest
+    statement is: the strategy is *consistent with* skill, not *evidence of*
+    skill.
+
+Every "beats buy-and-hold" claim in this file now carries this caveat. What
+the strategy DOES robustly deliver is the risk profile (test MaxDD -31% to
+-49% vs BH -84% full-sample), which is a portfolio-construction property,
+not a forecasting claim.
+
+## RESULT: strategy-level blend adopted — composite 75% / trend-ensemble 25%
+
+With factor mining exhausted, the remaining diversification was at the
+strategy layer. Blending RAW target weights (engine trades the netted blend)
+of the two mechanically different survivors, selected on train+val only at
+fee 0.2% / band 0.20:
+
+| blend          | validation  | tv-mean | minYr | trades | test (after) |
+|----------------|-------------|---------|-------|--------|--------------|
+| composite only | 1.31 / 2.15 | 1.32    | -0.88 | 167    | 0.97 / 1.96  |
+| **C75/E25**    | **1.47 / 2.32** | 1.37 | -0.52 | **145** | **1.08 / 2.17** |
+| C50/E50        | 1.21 / 1.97 | 1.15    | -1.91 | 164    | 0.96 / 1.97  |
+| any BH blend   | <= 0.88     |         |       |        |              |
+
+C75/E25 improves validation, worst-year AND trade count simultaneously —
+weight averaging nets opposing trades, so the diversification is better than
+free. Test (checked after selection) agrees: 1.08/2.17. Adopted as production
+(`composite_blend`, blend=0.75). BH-containing blends die on 2022 validation.
+The significance caveats above apply unchanged — the blend's improvement over
+the composite alone is well inside the bootstrap noise band; the adoption
+rationale is the selection rule + the diversification prior + lower turnover,
+not a significance claim.
+
+## Standing tools: breadth gate + adopted-factor decay monitor
+
+Implemented the two process fixes from the round above:
+  - `factor_mining.py` now reports yearly-IC **breadth** (yr_support/yr_oppose
+    over 2019-2023 at h20). It would have flagged dgs10_chg_60 (1+/3-) and
+    rrp_chg_30 (3+/2-) BEFORE any composite test. Limits: exsply_ratio scores
+    a clean 3+/0- — breadth cannot catch structural regime breaks (ETF era),
+    only event concentration; and slow cycle factors (halving_cos 2+/2-,
+    mvrv_z_365 1+/3-) legitimately score poorly within years — judged by
+    mechanism, not auto-rejected.
+  - `factor_monitor.py` — standing decay monitor for DEFAULT_FACTORS
+    (reporting only, never for selection). First run (test = 2024-01 ->
+    2026-05): **5/9 adopted factors flagged** — vol_regime, mom_120,
+    cnnfg_z_60 DECAYED (test-window sign flip); kurt_30, btc_eth_rs_30 WEAK
+    (|IC| < 0.03). halving_cos, mvrv_z_365, mvrv_mom_30, ex_netflow_to_mcap
+    hold. The composite still beats BH on test (1.04/2.16 vs 0.76/1.81) on
+    the strength of the holders + IC-weighting + vol targeting, but the
+    factor base is eroding in the post-ETF regime.
+
+DECISION (2026-06, delegated to and taken by the research agent): **HOLD —
+do not roll the split.** Evidence: the composite's edge is diluted, not dead.
+Trailing-365d Sharpe edge over buy-and-hold across the test window: mean
++0.06, currently **+0.18**, never below -0.26; test MaxDD -31% vs BH -49%;
+in the 2026 drawdown the composite is losing materially less (-0.42 vs
+-0.60 trailing Sharpe) — the downside-protection profile it was selected
+for is delivering. Rolling now would consume 2024-25 and leave only ~5
+months of clean out-of-sample. Factor-IC fatigue alone does not justify
+that trade.
+
+To keep this from becoming indefinite discretion, the roll condition is
+PRE-REGISTERED in `factor_monitor.py` (decided while ahead, not in a
+drawdown panic):
+  ROLL if trailing-365d Sharpe edge < -0.30, or edge < 0 with >=5 factors
+  flagged — on two monitor runs >= 60 days apart (run log committed at
+  results/factor_monitor_log.csv). Until it fires, no "what would 2024-25
+  select" analysis is run at all — looking is consuming.
+First run: edge +0.18, 5/9 flags -> HOLD.
+
 ## How the lead was built: factor mining (deterministic)
 
 Pivoting from "more models on the same features" to MINING NEW FACTORS found the

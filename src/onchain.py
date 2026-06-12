@@ -25,6 +25,9 @@ import pandas as pd
 RAW_DIR = Path(__file__).resolve().parent.parent / "data" / "raw"
 
 CM_BASE = "https://community-api.coinmetrics.io/v4/timeseries/asset-metrics"
+# CoinMetrics publishes the same community CSVs to GitHub daily; used as a
+# fallback when the API host is unreachable from the execution environment.
+CM_GITHUB_MIRROR = "https://raw.githubusercontent.com/coinmetrics/data/master/csv/{asset}.csv"
 
 # CoinMetrics community-tier metrics available for BTC and useful as factors.
 ONCHAIN_METRICS = [
@@ -35,6 +38,10 @@ ONCHAIN_METRICS = [
     "FlowInExUSD",   # exchange inflows (sell pressure)
     "FlowOutExUSD",  # exchange outflows (accumulation)
     "TxCnt",         # transaction count
+    "HashRate",      # network hash rate (miner-economics factors)
+    "IssTotUSD",     # issuance value (Puell multiple)
+    "SplyExNtv",     # native supply held on exchanges
+    "SplyCur",       # current total supply (exchange supply ratio denominator)
 ]
 
 
@@ -67,27 +74,44 @@ def load_coinmetrics(
         df.index.name = "date"
         return df
 
-    rows: list[dict] = []
-    url = (
-        f"{CM_BASE}?assets={asset}&metrics={','.join(metrics)}"
-        f"&frequency=1d&page_size=10000&start_time={start_date}"
-    )
-    while url:
-        with urllib.request.urlopen(url, timeout=40) as resp:  # noqa: S310
-            payload = json.loads(resp.read().decode("utf-8"))
-        rows.extend(payload.get("data", []))
-        url = payload.get("next_page_url")
+    try:
+        rows: list[dict] = []
+        url = (
+            f"{CM_BASE}?assets={asset}&metrics={','.join(metrics)}"
+            f"&frequency=1d&page_size=10000&start_time={start_date}"
+        )
+        while url:
+            with urllib.request.urlopen(url, timeout=40) as resp:  # noqa: S310
+                payload = json.loads(resp.read().decode("utf-8"))
+            rows.extend(payload.get("data", []))
+            url = payload.get("next_page_url")
+        df = pd.DataFrame(rows)
+        if df.empty:
+            raise RuntimeError(f"CoinMetrics returned no data for {metrics}.")
+        df["date"] = pd.to_datetime(df["time"], utc=True).dt.normalize()
+        df = df.drop(columns=["time", "asset"]).set_index("date").sort_index()
+    except Exception:  # noqa: BLE001 - fall back to the GitHub CSV mirror
+        df = _load_coinmetrics_github(metrics, asset)
 
-    df = pd.DataFrame(rows)
-    if df.empty:
-        raise RuntimeError(f"CoinMetrics returned no data for {metrics}.")
-    df["date"] = pd.to_datetime(df["time"], utc=True).dt.normalize()
-    df = df.drop(columns=["time", "asset"]).set_index("date").sort_index()
+    df = df[df.index >= pd.Timestamp(start_date, tz="UTC")]
     for c in df.columns:
         df[c] = pd.to_numeric(df[c], errors="coerce")
     df = df[~df.index.duplicated(keep="first")]
     df.to_csv(cache)
     return df
+
+
+def _load_coinmetrics_github(metrics: list[str], asset: str) -> pd.DataFrame:
+    """Fetch the requested metrics from CoinMetrics' daily GitHub CSV dump."""
+    url = CM_GITHUB_MIRROR.format(asset=asset)
+    req = urllib.request.Request(url, headers={"User-Agent": "btc-research/1.0"})
+    with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
+        full = pd.read_csv(resp)
+    missing = [m for m in metrics if m not in full.columns]
+    if missing:
+        raise RuntimeError(f"CoinMetrics GitHub mirror lacks metrics: {missing}.")
+    full["date"] = pd.to_datetime(full["time"], utc=True).dt.normalize()
+    return full.set_index("date")[metrics].sort_index()
 
 
 def load_okx_funding(
@@ -146,7 +170,38 @@ def load_okx_funding(
     return daily
 
 
-def merge_onchain(df: pd.DataFrame, onchain: pd.DataFrame) -> pd.DataFrame:
+def load_stablecoin_mcap(
+    assets: tuple[str, ...] = ("usdt", "usdc"),
+    *,
+    force_reload: bool = False,
+    raw_dir: Path | None = None,
+) -> pd.DataFrame:
+    """Aggregate stablecoin market cap (USD), cached, UTC-indexed.
+
+    Sums CoinMetrics ``CapMrktCurUSD`` across ``assets``. A coin contributes 0
+    before its launch (USDC starts 2018-10), so the aggregate is continuous
+    from the first asset's history onward.
+
+    Returns:
+        DataFrame with one float column ``stable_mcap_usd``.
+    """
+    raw_dir = raw_dir or RAW_DIR
+    total: pd.Series | None = None
+    for asset in assets:
+        cap = load_coinmetrics(
+            ["CapMrktCurUSD"], asset=asset, start_date="2015-01-01",
+            force_reload=force_reload, raw_dir=raw_dir,
+        )["CapMrktCurUSD"]
+        total = cap if total is None else total.add(cap.reindex(
+            total.index.union(cap.index)).fillna(0.0), fill_value=0.0)
+    out = total.to_frame("stable_mcap_usd").sort_index()
+    out.index.name = "date"
+    return out
+
+
+def merge_onchain(
+    df: pd.DataFrame, onchain: pd.DataFrame, *, ffill_limit: int | None = None
+) -> pd.DataFrame:
     """Left-join on-chain columns onto a price frame, forward-filling gaps.
 
     On-chain metrics can lag a day or have occasional gaps; forward-filling
@@ -155,12 +210,16 @@ def merge_onchain(df: pd.DataFrame, onchain: pd.DataFrame) -> pd.DataFrame:
     Args:
         df: Price/feature frame (UTC DatetimeIndex).
         onchain: On-chain frame to merge in.
+        ffill_limit: Maximum days a value may be carried forward (None =
+            unlimited). Use a limit for sources that can go stale (static
+            archives): beyond it values become NaN so downstream consumers
+            degrade gracefully instead of acting on expired readings.
 
     Returns:
         A copy of ``df`` with on-chain columns added (ffilled).
     """
     out = df.copy()
-    joined = onchain.reindex(out.index.union(onchain.index)).ffill()
+    joined = onchain.reindex(out.index.union(onchain.index)).ffill(limit=ffill_limit)
     for col in onchain.columns:
         out[col] = joined[col].reindex(out.index)
     return out

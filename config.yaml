@@ -9,7 +9,10 @@ data:
 
 portfolio:
   initial_capital: 10000
-  fee_rate: 0.005
+  # 2026-06: owner lowered the fee assumption 0.5% -> 0.2% per side (closer to
+  # spot taker tiers; still conservative vs perp maker/taker). The band below
+  # was re-selected for this fee level.
+  fee_rate: 0.002
   slippage_rate: 0.0
   cash_return: 0.0
 
@@ -26,13 +29,17 @@ backtest:
   rebalance_policy: "signal_change_or_risk_control"
   leverage_breach_action: "delever_next_day"
   stop_trading_if_equity_zero: true
-  # No-trade band. Raised 0.20 -> 0.30 to cut turnover/fees (0.5% per trade is
-  # steep) without sacrificing risk control: ~44% fewer trades and ~35% lower
-  # fees, the best validation Sharpe (0.91), drawdown held (~-51% full sample),
-  # and out-of-sample it beats buy-and-hold on both Sharpe and NAV at much lower
-  # drawdown. (0.40 cut more fees but blew full-sample drawdown out to -67%.)
-  # Chosen by the fee prior + validation, not by peeking at test.
-  weight_band: 0.30
+  # No-trade band. At fee 0.5% the band was 0.30 (see git history). With the
+  # fee lowered to 0.2% the turnover penalty halves and the 2026-06 grid
+  # (bands 0.30/0.20/0.10 x strategies, selection on train+val only) picks
+  # 0.20 back: best validation Sharpe (1.31 vs 1.15 at 0.30), tv-mean 1.32,
+  # worst-year -0.88, full-sample MaxDD -47%. 0.10 had a higher tv-mean (1.39)
+  # but lower validation Sharpe and ~3x the trades — the (weakened) fee prior
+  # breaks the tie toward 0.20. Test, checked only after selection: 0.97/1.96,
+  # beats buy-and-hold on both. Caveat on record: the 0.30 variant's test was
+  # higher (1.07/2.22) — the 2024-26 window keeps rewarding slower trading;
+  # tracked by factor_monitor, not acted on (that would be test-peeking).
+  weight_band: 0.20
 
 funding:
   enabled: true
@@ -60,8 +67,49 @@ strategy:
   #   buy_and_hold:     Sharpe 0.58, NAV 1.50, MaxDD -50%
   # Train+val years mean-yearly Sharpe 1.41 vs BH 1.12. ~84 trades. The edge is
   # broad-based (4/8 win years) and strongest in bear years (downside protection).
-  name: "factor_composite"
+  # 2026-06 update: added cnnfg_z_60 (CNN equity Fear & Greed 60d z-score,
+  # contrarian) to DEFAULT_FACTORS. Selected on train+val only (val Sharpe
+  # 1.05 -> 1.12); test confirmed afterwards (1.02/2.05 -> 1.04/2.16 on the
+  # CoinMetrics-mirror data snapshot). See RESEARCH_FINDINGS.md.
+  # 2026-06 update 2: production is now composite_blend = 0.75 x the composite
+  # + 0.25 x trend_ensemble (strategy-level diversification). Selected on
+  # train+val at fee 0.2% / band 0.20: validation Sharpe 1.47 vs 1.31, best
+  # worst-year (-0.52), FEWER trades than the composite alone (145 vs 167 —
+  # weight averaging nets opposing trades). Test, checked after selection,
+  # agreed: 1.08/2.17 vs 0.97/1.96. Statistical caveat on record (see
+  # RESEARCH_FINDINGS.md): no window's edge over buy-and-hold is statistically
+  # significant; deflated-Sharpe P[skill] 0.13-0.63.
+  # 2026-06 update 3: ELR de-leveraging overlay added to composite_blend.
+  # System leverage (CryptoQuant Estimated Leverage Ratio) is the strongest
+  # standalone IC in the 107-factor library but added nothing inside the
+  # return composite (a risk factor, not a return factor). As a position
+  # overlay (scale down when ELR's 180d z-score stretches above z0), selected
+  # on train+val across a 2x2 grid: validation Sharpe 1.47 -> 1.64 with every
+  # grid corner improving, validation MaxDD -25% -> -17%; tie-break by fewer
+  # trades picked z0=0.5/k=0.5. Test, read after selection: Sharpe ~flat
+  # (1.06 vs 1.08), test MaxDD improved (-20% vs -26%), NAV gave back some
+  # upside (1.91 vs 2.17) - the risk improvement is confirmed, the return
+  # cost is the price of the insurance.
+  name: "composite_blend"
   params:
+    blend: 0.75               # weight on the composite leg (1-x on ensemble)
+    # ELR overlay REMOVED from production (owner decision 2026-06): the only
+    # free ELR source is a static archive (last stamp 2026-04-10) that cannot
+    # be kept fresh, and a production model must not depend on a feed we
+    # cannot sustain. The overlay itself remains implemented, tested and
+    # validated (val Sharpe 1.47 -> 1.64 when live data existed); re-enable
+    # by setting elr_overlay: true once a sustainable feed exists (free
+    # OI/reserve proxy needs ~6 months of collection, or CryptoQuant
+    # Professional ~$99/mo). See RESEARCH_FINDINGS.md.
+    elr_overlay: false
+    # Owner decision 2026-06: enable shorts (spec section 1 always allowed
+    # long/flat/short; the strategy layer had never used them). Shorts bind in
+    # the trend-ensemble leg. Recorded honestly: validation prefers long/flat
+    # (1.64 vs 1.56 — 2023 bear-to-bull whipsaw); test and full-sample favor
+    # shorts (test 1.15/1.93 vs 1.05/2.13 on Sharpe, MaxDD -29% vs -49%).
+    # NOTE: short borrow cost is currently 0.0 in the funding section — a
+    # known optimism to revisit if this ever approaches real deployment.
+    allow_short: true
     train_end: "2021-12-31"   # factor signs use only data <= this (no lookahead)
     horizon: 20
     tilt: 0.5

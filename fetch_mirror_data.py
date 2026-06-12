@@ -1,0 +1,159 @@
+"""Bootstrap data/raw caches from GitHub mirrors when primary APIs are blocked.
+
+Some execution environments (CI sandboxes, restricted networks) cannot reach
+CryptoCompare/CoinMetrics/alternative.me APIs but CAN reach
+raw.githubusercontent.com. This script builds every cache the research scripts
+need from public mirrors:
+
+  1. BTC daily "OHLCV" from CoinMetrics' daily GitHub CSV dump
+     (https://github.com/coinmetrics/data). CoinMetrics community data has a
+     daily close (PriceUSD, UTC) and reported spot volume but NO intraday
+     high/low. We synthesize:
+         open_t = close_{t-1}   (exact for a 24/7 market on UTC-midnight bars)
+         high_t = max(open_t, close_t)
+         low_t  = min(open_t, close_t)
+     The high/low are therefore LOWER BOUNDS on the true range. Everything in
+     the engine and the factor library uses close/volume only; the only
+     consumers of high/low are the Donchian channels (donchian_breakout,
+     trend_ensemble), which degrade to close-based channels. This is an
+     explicit, opt-in approximation — running this script is the opt-in.
+
+  2. The CoinMetrics on-chain metric cache (same numbers as the community API;
+     the GitHub dump is published by CoinMetrics itself).
+
+  3. Crypto Fear & Greed (alternative.me archive) and CNN equity Fear & Greed
+     (community archive) sentiment caches.
+
+Run:  python3 fetch_mirror_data.py
+"""
+
+from __future__ import annotations
+
+import urllib.request
+
+import pandas as pd
+
+from src.crossasset import load_crossasset
+from src.cryptoquant import load_cme_basis, load_cryptoquant
+from src.data import PROCESSED_DIR, RAW_DIR, clean_data
+from src.macro import load_dxy, load_fred_macro
+from src.onchain import (
+    CM_GITHUB_MIRROR,
+    ONCHAIN_METRICS,
+    load_coinmetrics,
+    load_stablecoin_mcap,
+)
+from src.sentiment import load_cnn_fear_greed, load_crypto_fear_greed
+
+
+def build_btc_ohlcv_cache(start: str = "2016-12-01") -> pd.DataFrame:
+    """Build data/raw/BTC-USD_1d.csv from the CoinMetrics GitHub daily dump,
+    gap-filled to the present from a daily-updated snapshot mirror."""
+    url = CM_GITHUB_MIRROR.format(asset="btc")
+    req = urllib.request.Request(url, headers={"User-Agent": "btc-research/1.0"})
+    with urllib.request.urlopen(req, timeout=180) as resp:  # noqa: S310
+        cm = pd.read_csv(resp, usecols=["time", "PriceUSD", "volume_reported_spot_usd_1d"])
+    cm["date"] = pd.to_datetime(cm["time"], utc=True).dt.normalize()
+    cm = cm.set_index("date").sort_index()
+    cm = cm[cm.index >= pd.Timestamp(start, tz="UTC")]
+
+    close = pd.to_numeric(cm["PriceUSD"], errors="coerce")
+    volume = pd.to_numeric(cm["volume_reported_spot_usd_1d"], errors="coerce")
+    close, volume = _gap_fill_recent(close, volume)
+
+    df = pd.DataFrame({"close": close})
+    df["open"] = close.shift(1)
+    df["high"] = df[["open", "close"]].max(axis=1)
+    df["low"] = df[["open", "close"]].min(axis=1)
+    df["volume"] = volume
+    df = df.dropna(subset=["open", "close"])
+    df = df[["open", "high", "low", "close", "volume"]]
+
+    RAW_DIR.mkdir(parents=True, exist_ok=True)
+    df.to_csv(RAW_DIR / "BTC-USD_1d.csv")
+    # Drop any stale processed cache so load_btc_data re-cleans from this raw.
+    processed = PROCESSED_DIR / "BTC-USD_1d.csv"
+    if processed.exists():
+        processed.unlink()
+    return clean_data(df)
+
+
+# Daily-updated Yahoo-sourced snapshot log (last snapshot of each UTC day is
+# taken ~23:50 UTC, i.e. within minutes of the daily close). Used ONLY to
+# extend the CoinMetrics series from its last full update to the present; the
+# current (incomplete) UTC day is excluded so daily-close semantics hold.
+GAP_FILL_URL = (
+    "https://raw.githubusercontent.com/DSmarc7/daily-quant-log/main/"
+    "market-tracker/data/crypto.csv"
+)
+
+
+def _gap_fill_recent(
+    close: pd.Series, volume: pd.Series
+) -> tuple[pd.Series, pd.Series]:
+    """Append post-CoinMetrics daily closes from the snapshot mirror."""
+    try:
+        req = urllib.request.Request(
+            GAP_FILL_URL, headers={"User-Agent": "btc-research/1.0"}
+        )
+        with urllib.request.urlopen(req, timeout=60) as resp:  # noqa: S310
+            snap = pd.read_csv(resp)
+    except Exception as exc:  # noqa: BLE001 - gap fill is best-effort
+        print(f"[warn] BTC gap-fill mirror unavailable: {exc}")
+        return close, volume
+    snap = snap[snap["ticker"] == "BTC-USD"].copy()
+    snap["fetched_at_utc"] = pd.to_datetime(snap["fetched_at_utc"], utc=True)
+    snap["date"] = pd.to_datetime(snap["date"], utc=True).dt.normalize()
+    snap = snap.sort_values("fetched_at_utc").groupby("date").last()
+    today = pd.Timestamp.now(tz="UTC").normalize()
+    last_full = close.dropna().index.max()
+    gap = snap[(snap.index > last_full) & (snap.index < today)]
+    if gap.empty:
+        return close, volume
+
+    # Cross-check the two price bases on overlapping days before splicing.
+    overlap = snap.index.intersection(close.dropna().index)
+    if len(overlap) >= 3:
+        rel = (pd.to_numeric(snap.loc[overlap, "close"], errors="coerce")
+               / close.loc[overlap] - 1.0).abs()
+        if rel.median() > 0.01:
+            print(f"[warn] gap-fill basis differs {rel.median():.1%} median; "
+                  "splice skipped")
+            return close, volume
+
+    print(f"BTC gap-fill: {gap.index.min().date()} -> {gap.index.max().date()} "
+          f"({len(gap)} days from snapshot mirror)")
+    close = pd.concat([close, pd.to_numeric(gap["close"], errors="coerce")])
+    volume = pd.concat([volume, pd.to_numeric(gap["volume"], errors="coerce")])
+    return close.sort_index(), volume.sort_index()
+
+
+def main() -> None:
+    btc = build_btc_ohlcv_cache()
+    print(
+        f"BTC close/volume (CoinMetrics mirror): {btc.index.min().date()} -> "
+        f"{btc.index.max().date()}  ({len(btc)} rows; OHLC synthesized from "
+        "close — see module docstring)"
+    )
+    oc = load_coinmetrics(ONCHAIN_METRICS, force_reload=True)
+    print(f"On-chain metrics: {oc.index.min().date()} -> {oc.index.max().date()}")
+    fng = load_crypto_fear_greed(force_reload=True)
+    print(f"Crypto F&G: {fng.index.min().date()} -> {fng.index.max().date()}")
+    cnn = load_cnn_fear_greed(force_reload=True)
+    print(f"CNN equity F&G: {cnn.index.min().date()} -> {cnn.index.max().date()}")
+    stab = load_stablecoin_mcap(force_reload=True)
+    print(f"Stablecoin mcap: {stab.index.min().date()} -> {stab.index.max().date()}")
+    fred = load_fred_macro(force_reload=True)
+    print(f"FRED macro: {fred.index.min().date()} -> {fred.index.max().date()}")
+    dxy = load_dxy(force_reload=True)
+    print(f"DXY: {dxy.index.min().date()} -> {dxy.index.max().date()}")
+    cq = load_cryptoquant(force_reload=True)
+    print(f"CryptoQuant behavior: {cq.index.min().date()} -> {cq.index.max().date()}")
+    cb = load_cme_basis(force_reload=True)
+    print(f"CME basis: {cb.index.min().date()} -> {cb.index.max().date()}")
+    ca = load_crossasset(force_reload=True)
+    print(f"Cross-asset (JPY/ARKK/QQQ/miners): {ca.index.min().date()} -> {ca.index.max().date()}")
+
+
+if __name__ == "__main__":
+    main()

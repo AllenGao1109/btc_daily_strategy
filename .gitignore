@@ -17,6 +17,8 @@ reports/figures/*.png
 
 # Auto-research result logs (regenerated)
 results/*.csv
+# ...except the monitor run log: decision state, not regenerable output
+!results/factor_monitor_log.csv
 
 # OS
 .DS_Store
