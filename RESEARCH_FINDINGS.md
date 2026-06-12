@@ -178,6 +178,21 @@ Hypothesis tested: "BTC matured since ~2015, vol fell, so early data is noise - 
 Conclusion: full history + vol-targeting is optimal - old data gives robustness and crash
 memory; the adaptive sizing captures the new low-vol regime. Do not trim.
 
+## Fee lowered to 0.2%/side; CNN equity Fear & Greed verified (not adopted)
+
+- Fee assumption: 0.5% -> 0.2% per side (owner decision; realistic for major exchanges,
+  and aligns with the parallel branch). Strategy is robust to it - full-sample Sharpe
+  1.18->1.22, fees drop ~$17k->$7.4k; band 0.20 still reasonable.
+- CNN equity Fear & Greed (cnnfg_z_60, from the parallel branch's sentiment.py) was
+  re-verified in OUR walk-forward framework (not blindly merged). Strong standalone IC
+  (h20 train -0.13 / val -0.199 - equity greed precedes BTC weakness). BUT adding it to
+  the 10-factor walk-forward composite does NOT improve OOS: validation +0.02 only, the
+  worst test cell degrades (Sharpe 1.11->0.98, NAV 2.17->1.91) and drawdown worsens
+  (-41%->-51%). It helped the parallel branch's FIXED-CUT composite, but our walk-forward
+  set (with rvol_z90/vol_asym_30) already captures the risk-sentiment information, so the
+  factor is directionally redundant and adds tail noise. NOT adopted. Lesson reaffirmed:
+  a factor that helps one baseline must be re-verified on ours before adoption.
+
 ## What works
 
 - **Volatility targeting + diversified trend ensemble** — lower drawdown

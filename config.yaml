@@ -9,7 +9,7 @@ data:
 
 portfolio:
   initial_capital: 10000
-  fee_rate: 0.005
+  fee_rate: 0.002   # 0.2% per side (owner decision 2026-06; was 0.5% spec) - realistic for major exchanges
   slippage_rate: 0.0
   cash_return: 0.0
 
