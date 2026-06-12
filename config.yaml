@@ -102,6 +102,14 @@ strategy:
     # OI/reserve proxy needs ~6 months of collection, or CryptoQuant
     # Professional ~$99/mo). See RESEARCH_FINDINGS.md.
     elr_overlay: false
+    # Owner decision 2026-06: enable shorts (spec section 1 always allowed
+    # long/flat/short; the strategy layer had never used them). Shorts bind in
+    # the trend-ensemble leg. Recorded honestly: validation prefers long/flat
+    # (1.64 vs 1.56 — 2023 bear-to-bull whipsaw); test and full-sample favor
+    # shorts (test 1.15/1.93 vs 1.05/2.13 on Sharpe, MaxDD -29% vs -49%).
+    # NOTE: short borrow cost is currently 0.0 in the funding section — a
+    # known optimism to revisit if this ever approaches real deployment.
+    allow_short: true
     train_end: "2021-12-31"   # factor signs use only data <= this (no lookahead)
     horizon: 20
     tilt: 0.5

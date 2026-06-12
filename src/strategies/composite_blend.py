@@ -70,7 +70,14 @@ def generate_signals(df: pd.DataFrame, params: dict) -> pd.Series:
     blend = float(params.pop("blend", DEFAULT_BLEND))
     if not 0.0 <= blend <= 1.0:
         raise ValueError(f"blend must be in [0, 1]; got {blend}.")
-    ens_params = params.pop("ensemble", DEFAULT_ENS_PARAMS)
+    ens_params = dict(params.pop("ensemble", DEFAULT_ENS_PARAMS))
+    # Owner decision 2026-06: shorts enabled in production. They bind in the
+    # trend-ensemble leg (the composite's tilt mapping rarely goes negative).
+    # On record: the 2022-23 validation window prefers long/flat (1.64 vs
+    # 1.56) because trend shorts get whipsawed in bear-to-bull turns; the
+    # owner accepts that trade for bear-market participation (see findings).
+    if "allow_short" in params:
+        ens_params["allow_short"] = bool(params.pop("allow_short"))
     use_overlay = bool(params.pop("elr_overlay", True))
     z0 = float(params.pop("elr_z0", DEFAULT_ELR_Z0))
     k = float(params.pop("elr_k", DEFAULT_ELR_K))

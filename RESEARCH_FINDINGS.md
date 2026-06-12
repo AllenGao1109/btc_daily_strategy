@@ -188,6 +188,27 @@ the 2022-23 validation window. Short-enabled ensemble joins jpy_vol_z_90,
 epu_z_60 and the short-history factors at the FRONT of the re-test queue
 for any future split roll.
 
+## DECISION (owner, 2026-06): shorts ENABLED in production
+
+Owner decision, recorded as such (like the fee change — a spec/risk
+preference, not a statistical adoption; spec section 1 always allowed
+long/flat/short). Shorts bind in the trend-ensemble leg
+(``allow_short: true`` in config). On data through 2026-06-10:
+
+| strat               | train       | validation  | test        | fullDD | minYr | 2026 |
+|---------------------|-------------|-------------|-------------|--------|-------|------|
+| PROD long/short     | 1.45 / 8.10 | 1.40 / 2.05 | **1.26 / 2.36** | **-31%** | **-0.33** | +2.41 |
+| ref long/flat       | 1.09 / 5.24 | **1.47 / 2.32** | 1.05 / 2.13 | -49%   | -0.88 | -0.88 |
+| buy-and-hold        | 1.36 / 46.5 | 0.19 / 0.91 | 0.56 / 1.46 | -84%   | -1.36 | —    |
+
+The honest ledger: validation still prefers long/flat (1.47 vs 1.40 — the
+2023 bear-to-bull whipsaw), and that is the risk the owner accepts; every
+other panel favors shorts (train, test, full-sample MaxDD nearly halved,
+best worst-year on record, trailing edge vs BH +1.57). Current stance:
+net short -0.13x, being covered as extreme-fear signals lift the composite
+leg. Caveats on record: short borrow cost is 0.0 in config (known
+optimism); the long/flat variant remains one flag away for comparison.
+
 ## DECISION (owner, 2026-06): ELR overlay REMOVED from production — operational, not statistical
 
 The only free ELR source is a static archive frozen at 2026-04-10; keeping it

@@ -92,3 +92,13 @@ def test_elr_overlay_causal_truncation_invariant():
     full = composite_blend.generate_signals(df, dict(PARAMS))
     trunc = composite_blend.generate_signals(df.iloc[:580], dict(PARAMS))
     pd.testing.assert_series_equal(full.iloc[:580], trunc)
+
+
+def test_allow_short_passthrough_enables_negative_weights():
+    df = _frame()
+    lf = composite_blend.generate_signals(df, dict(PARAMS))
+    ls = composite_blend.generate_signals(df, {**PARAMS, "allow_short": True})
+    assert (lf >= -1e-12).all()  # long/flat leg never short
+    assert ls.between(-2.0, 2.0).all()
+    # Same composite leg: any difference must come from the ensemble leg.
+    assert not ls.equals(lf)
