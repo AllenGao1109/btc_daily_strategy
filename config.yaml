@@ -93,10 +93,15 @@ strategy:
   name: "composite_blend"
   params:
     blend: 0.75               # weight on the composite leg (1-x on ensemble)
-    elr_overlay: true         # de-leverage when system leverage is stretched
-    elr_z0: 0.5
-    elr_k: 0.5
-    elr_floor: 0.25
+    # ELR overlay REMOVED from production (owner decision 2026-06): the only
+    # free ELR source is a static archive (last stamp 2026-04-10) that cannot
+    # be kept fresh, and a production model must not depend on a feed we
+    # cannot sustain. The overlay itself remains implemented, tested and
+    # validated (val Sharpe 1.47 -> 1.64 when live data existed); re-enable
+    # by setting elr_overlay: true once a sustainable feed exists (free
+    # OI/reserve proxy needs ~6 months of collection, or CryptoQuant
+    # Professional ~$99/mo). See RESEARCH_FINDINGS.md.
+    elr_overlay: false
     train_end: "2021-12-31"   # factor signs use only data <= this (no lookahead)
     horizon: 20
     tilt: 0.5

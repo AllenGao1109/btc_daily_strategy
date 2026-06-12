@@ -188,6 +188,33 @@ the 2022-23 validation window. Short-enabled ensemble joins jpy_vol_z_90,
 epu_z_60 and the short-history factors at the FRONT of the re-test queue
 for any future split roll.
 
+## DECISION (owner, 2026-06): ELR overlay REMOVED from production — operational, not statistical
+
+The only free ELR source is a static archive frozen at 2026-04-10; keeping it
+fresh requires either a paid feed (CryptoQuant Professional ~$99/mo) or ~6
+months of self-collected OI/reserve proxy data. A production model must not
+depend on a feed we cannot sustain, so `elr_overlay: false` in config. The
+overlay code stays implemented, tested and validated — re-enable when a
+sustainable feed exists.
+
+Re-analysis on the gap-filled data (price through 2026-06-10, which now
+includes the early-June ~-20% crash):
+
+| strat              | validation  | test        | trades | fullDD | trailing edge |
+|--------------------|-------------|-------------|--------|--------|---------------|
+| PROD (no overlay)  | 1.47 / 2.32 | **1.05 / 2.13** | 145 | -49%   | **+0.35**     |
+| ref: with overlay  | 1.64 / 2.47 | 1.00 / 1.85 | 177    | -49%   |               |
+| buy-and-hold       | 0.19 / 0.91 | 0.56 / 1.46 | 1      | -84%   |               |
+
+Removal gives up the validation gain (1.64 -> 1.47) but on the test window —
+now extended through the June crash — the no-overlay variant is actually
+AHEAD (1.05/2.13 vs 1.00/1.85): the overlay's test-period contribution did
+not survive fresher data. Current guidance is unchanged (signal +0.29x, held
++0.26x, HOLD) because the staleness guard had already neutralized the
+overlay in the recent tail. The trailing-365d edge over BH reads +0.35, the
+healthiest reading on record — the crash demonstrated the core blend's
+downside protection on its own.
+
 ## RESULT: ELR de-leveraging OVERLAY adopted — risk factors enter through the risk door
 
 Follow-up to the round below: elr_z_180 was rejected as a *return* factor
