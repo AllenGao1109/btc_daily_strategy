@@ -30,3 +30,4 @@ logs/
 gold/__pycache__/
 assets/__pycache__/
 data/processed/assets/
+portfolio/__pycache__/
