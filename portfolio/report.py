@@ -39,8 +39,9 @@ def build_report(force=True) -> dict:
         "dates": [d.date().isoformat() for d in ret.index[-n:]],
         "port": list((1 + ret.iloc[-n:]).cumprod().values),
         "ew": list((1 + eq_ret.reindex(ret.index).iloc[-n:]).cumprod().values),
-        "btc": list((1 + panel["ret_btc"].reindex(ret.index).iloc[-n:]).cumprod().values),
     }
+    for a in B.ASSETS:   # each base asset's buy-hold over the window
+        eqcurve[a] = list((1 + panel[f"ret_{a}"].reindex(ret.index).iloc[-n:]).cumprod().values)
     return {
         "as_of": panel.index[-1].date().isoformat(),
         "assets": B.ASSETS, "views": dict(zip(B.ASSETS, sig.round(2))),
@@ -60,13 +61,18 @@ def make_chart(rep: dict, path: str) -> str | None:
     import matplotlib; matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     d = pd.to_datetime(eq["dates"])
-    fig, ax = plt.subplots(figsize=(7.2, 3.1))
-    for key, color, lbl in [("port", "#2d6cdf", "BL Portfolio"), ("ew", "#999", "Equal-weight 25%"),
-                            ("btc", "#e0a030", "BTC buy-hold")]:
+    fig, ax = plt.subplots(figsize=(7.6, 3.6))
+    # base assets (thin), then equal-weight, then the BL portfolio on top (bold)
+    acolor = {"btc": "#e0a030", "spy": "#2ca02c", "qqq": "#9467bd", "tlt": "#17becf", "gld": "#bcbd22"}
+    for a in ["btc", "spy", "qqq", "tlt", "gld"]:
+        if a in eq:
+            v = np.asarray(eq[a], float); v = v / v[0]
+            ax.plot(d, v, color=acolor.get(a, "#bbb"), lw=1.0, alpha=0.75, label=a.upper())
+    for key, color, lbl, lw in [("ew", "#888", "Equal-weight 25%", 1.4), ("port", "#2d6cdf", "BL Portfolio", 2.6)]:
         v = np.asarray(eq[key], float); v = v / v[0]
-        ax.plot(d, v, color=color, lw=2.0 if key == "port" else 1.3, label=lbl)
-    ax.set_title(f"Portfolio vs benchmarks - last ~{len(d)//252}y (=1 at start)", fontsize=10)
-    ax.legend(fontsize=9); ax.grid(alpha=0.25)
+        ax.plot(d, v, color=color, lw=lw, label=lbl)
+    ax.set_title(f"BL portfolio vs base assets & equal-weight - last ~{len(d)//252}y (=1 at start)", fontsize=9.5)
+    ax.legend(fontsize=8, ncol=2, loc="upper left"); ax.grid(alpha=0.25)
     fig.tight_layout(); fig.savefig(path, dpi=120); plt.close(fig)
     return path
 
