@@ -28,3 +28,5 @@ email_config.json
 logs/
 
 gold/__pycache__/
+assets/__pycache__/
+data/processed/assets/
