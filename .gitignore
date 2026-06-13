@@ -26,3 +26,5 @@ email_config.json
 
 # Local logs and email previews
 logs/
+
+gold/__pycache__/
