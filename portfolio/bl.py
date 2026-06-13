@@ -1,20 +1,20 @@
-"""Black-Litterman long-only portfolio over {BTC,SPY,QQQ,TLT,GLD}.
+"""Black-Litterman long-only portfolio: BTC, SPY, QQQ, GLD + SGOV cash (no bonds).
 
-Structure A: long-only, no leverage (weights sum <=1, rest cash). Risk-parity prior +
-per-asset views (the strategy signals) with confidence reflecting each asset's verified
-edge (BTC/TLT high; SPY/QQQ/GLD low -> held mostly via the prior). Band rebalancing,
-per-asset fees. Compared vs equal-weight and risk-parity-no-views.
+Structure A: long-only, no leverage. Risk-parity prior over the 4 risk assets + per-asset
+views (the strategy signals) with confidence reflecting each asset's verified edge (BTC
+high; SPY/QQQ/GLD held mostly via the prior). The residual (1 - sum of risk weights) is
+parked in SGOV, earning the daily short T-bill rate (ret_cash). Equity-bucket cap on
+SPY+QQQ. Band rebalancing, per-asset fees.
 """
 from __future__ import annotations
 import warnings; warnings.filterwarnings("ignore")
 import numpy as np, pandas as pd
 from portfolio.panel import build
 
-ASSETS=["btc","spy","qqq","tlt","gld"]
-CONF={"btc":1.0,"tlt":0.8,"qqq":0.35,"spy":0.30,"gld":0.40}   # view confidence (edge strength)
-FEE={"btc":0.002,"spy":0.001,"qqq":0.001,"tlt":0.001,"gld":0.001}
-CAP=0.40; COVWIN=126; SHRINK=0.2; DELTA_TS=0.4; TAU=0.05; VIEW_SCALE=1.0
-EQ_CAP=0.40  # cap on combined SPY+QQQ (0.93-correlated) -> better Sharpe, less concentration
+ASSETS=["btc","spy","qqq","gld"]
+CONF={"btc":1.0,"qqq":0.35,"spy":0.30,"gld":0.40}
+FEE={"btc":0.002,"spy":0.001,"qqq":0.001,"gld":0.001}
+CAP=0.40; EQ_CAP=0.40; COVWIN=126; SHRINK=0.2; DELTA_TS=0.4; TAU=0.05; VIEW_SCALE=1.0
 SPLIT={"train":("2017-01-01","2021-01-01"),"val":("2021-01-01","2023-07-01"),"test":("2023-07-01","2027-01-01")}
 
 def cov(Rwin):
@@ -22,38 +22,35 @@ def cov(Rwin):
     return (1-SHRINK)*S+SHRINK*np.diag(np.diag(S))
 
 def bl_target(Rwin, signals):
-    S=cov(Rwin); sig=np.sqrt(np.diag(S)); n=len(ASSETS)
-    iv=1.0/sig; w_prior=iv/iv.sum()                      # risk-parity (inverse-vol) prior
-    sp=np.sqrt(w_prior@S@w_prior); delta=DELTA_TS/sp     # calibrate risk aversion to prior Sharpe
+    S=cov(Rwin); sig=np.sqrt(np.diag(S))
+    iv=1.0/sig; w_prior=iv/iv.sum()
+    sp=np.sqrt(w_prior@S@w_prior); delta=DELTA_TS/sp
     Pi=delta*S@w_prior
-    Q=Pi+VIEW_SCALE*signals*sig                          # absolute views = equilibrium tilted by signal*vol
+    Q=Pi+VIEW_SCALE*signals*sig
     conf=np.array([CONF[a] for a in ASSETS])
-    Omega=np.diag(TAU*np.diag(S)/conf)
-    tS=TAU*S; tSinv=np.linalg.inv(tS); Oinv=np.linalg.inv(Omega)
-    M=np.linalg.inv(tSinv+Oinv); mu=M@(tSinv@Pi+Oinv@Q)
+    Omega=np.diag(TAU*np.diag(S)/conf); tS=TAU*S
+    M=np.linalg.inv(np.linalg.inv(tS)+np.linalg.inv(Omega))
+    mu=M@(np.linalg.inv(tS)@Pi+np.linalg.inv(Omega)@Q)
     w=(1/delta)*np.linalg.inv(S)@mu
     w=np.clip(w,0,CAP)
     if w.sum()>1: w=w/w.sum()
-    ei=[ASSETS.index("spy"),ASSETS.index("qqq")]     # equity-bucket cap (excess -> cash)
-    es=w[ei].sum()
-    if es>EQ_CAP: w[ei]*=EQ_CAP/es
+    ei=[ASSETS.index("spy"),ASSETS.index("qqq")]; es=w[ei].sum()
+    if es>EQ_CAP: w[ei]*=EQ_CAP/es          # equity-bucket cap -> excess to SGOV
     return w
 
 def backtest(panel, weight_fn, band=0.08):
     R=panel[[f"ret_{a}" for a in ASSETS]].values
-    S=panel[[f"sig_{a}" for a in ASSETS]].values
-    n=len(ASSETS); held=np.zeros(n); rows=[]
-    fee=np.array([FEE[a] for a in ASSETS])
-    for t in range(COVWIN, len(panel)-1):
-        Rwin=R[t-COVWIN:t]                                # trailing returns (causal)
-        wt=weight_fn(Rwin, S[t])                          # target using data up to t
-        if np.abs(wt-held).sum()>band:
-            turn=np.abs(wt-held); cost=(turn*fee).sum(); held=wt.copy()
-        else: cost=0.0
-        pr=held@R[t+1]-cost                               # held into t+1
+    Sg=panel[[f"sig_{a}" for a in ASSETS]].values
+    cash=panel["ret_cash"].values
+    held=np.zeros(len(ASSETS)); rows=[]; fee=np.array([FEE[a] for a in ASSETS])
+    for t in range(COVWIN,len(panel)-1):
+        wt=weight_fn(R[t-COVWIN:t], Sg[t])
+        cost=(np.abs(wt-held)*fee).sum() if np.abs(wt-held).sum()>band else 0.0
+        if cost>0 or np.abs(wt-held).sum()>band: held=wt.copy()
+        pr=held@R[t+1] + max(0.0,1-held.sum())*cash[t+1] - cost   # residual earns SGOV
         rows.append((panel.index[t+1], pr, held.copy()))
-    idx=[r[0] for r in rows]; ret=pd.Series([r[1] for r in rows],index=idx)
-    W=pd.DataFrame([r[2] for r in rows],index=idx,columns=ASSETS)
+    ret=pd.Series([r[1] for r in rows],index=[r[0] for r in rows])
+    W=pd.DataFrame([r[2] for r in rows],index=[r[0] for r in rows],columns=ASSETS)
     return ret, W
 
 def perf(ret,a=None,b=None):
@@ -71,11 +68,9 @@ def riskparity(Rwin,sig):
 
 if __name__=="__main__":
     panel=build()
-    print(f"组合回测 {panel.index[COVWIN].date()} -> {panel.index[-1].date()}  (格式 Sharpe/NAV/MaxDD)\n")
+    print(f"组合回测 {panel.index[COVWIN].date()} -> {panel.index[-1].date()}  (Sharpe/NAV/MaxDD)\n")
     print(f"{'策略':20s} {'全样本':>16s}  ||  train | val | test")
-    for name,fn in [("等权 25%(基准)",equal_w),("风险平价(无观点)",riskparity),("Black-Litterman",bl_target)]:
+    for name,fn in [("等权 25%",equal_w),("风险平价",riskparity),("Black-Litterman",bl_target)]:
         ret,W=backtest(panel,fn); line(ret,name)
-    # single assets buy-hold for reference
     print()
-    for a in ASSETS:
-        line(panel[f"ret_{a}"].loc[panel.index[COVWIN]:], f"  持有 {a}")
+    for a in ASSETS: line(panel[f"ret_{a}"].loc[panel.index[COVWIN]:], f"  持有 {a}")

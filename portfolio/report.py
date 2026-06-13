@@ -92,7 +92,7 @@ def render_html(rep: dict) -> str:
             f"<td style='{td};color:{col}'>{v:+.2f}</td>"
             f"<td style='{td}'>{hw*100:.1f}%</td><td style='{td};font-weight:bold'>{tw*100:.1f}%</td>"
             f"<td style='{td};color:{'#c0392b' if abs(chg)>0.03 else '#999'}'>{chg*100:+.1f}%</td></tr>")
-    rows.append(f"<tr><td style='{td};text-align:left'>现金 Cash</td><td style='{td}'>-</td>"
+    rows.append(f"<tr><td style='{td};text-align:left'>SGOV 现金(生息)</td><td style='{td}'>-</td>"
                 f"<td style='{td}'>-</td><td style='{td};font-weight:bold'>{rep['cash_target']*100:.1f}%</td><td style='{td}'></td></tr>")
     flag = ("⚠️ 调仓 REBALANCE" if is_trade else "持有 HOLD")
     return (
@@ -108,7 +108,8 @@ def render_html(rep: dict) -> str:
         f"<p style='font-size:13px;color:#555;margin-top:10px'>组合表现 Portfolio: 全样本 Sharpe <b>{s['full_sharpe']}</b> / "
         f"NAV {s['full_nav']} / 回撤 {s['full_dd']}% · 近一年 Sharpe {s['recent_sharpe']}. "
         f"对比 vs 等权25% Equal-weight: Sharpe {s['ew_sharpe']} / 回撤 {s['ew_dd']}%.</p>"
-        f"<p style='color:#888;font-size:12px'>长仓、不加杠杆;BTC 看空则转现金。仅研究指引,手动执行。Research guidance - act manually.</p></div>")
+        f"<p style='color:#888;font-size:12px'>长仓、不加杠杆;风险资产看空则退到 SGOV(生息现金,~4-5%)。"
+        f"全 Robinhood 可交易。仅研究指引,手动执行。Research guidance - act manually.</p></div>")
 
 
 if __name__ == "__main__":
