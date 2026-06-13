@@ -14,6 +14,7 @@ ASSETS=["btc","spy","qqq","tlt","gld"]
 CONF={"btc":1.0,"tlt":0.8,"qqq":0.35,"spy":0.30,"gld":0.40}   # view confidence (edge strength)
 FEE={"btc":0.002,"spy":0.001,"qqq":0.001,"tlt":0.001,"gld":0.001}
 CAP=0.40; COVWIN=126; SHRINK=0.2; DELTA_TS=0.4; TAU=0.05; VIEW_SCALE=1.0
+EQ_CAP=0.40  # cap on combined SPY+QQQ (0.93-correlated) -> better Sharpe, less concentration
 SPLIT={"train":("2017-01-01","2021-01-01"),"val":("2021-01-01","2023-07-01"),"test":("2023-07-01","2027-01-01")}
 
 def cov(Rwin):
@@ -33,6 +34,9 @@ def bl_target(Rwin, signals):
     w=(1/delta)*np.linalg.inv(S)@mu
     w=np.clip(w,0,CAP)
     if w.sum()>1: w=w/w.sum()
+    ei=[ASSETS.index("spy"),ASSETS.index("qqq")]     # equity-bucket cap (excess -> cash)
+    es=w[ei].sum()
+    if es>EQ_CAP: w[ei]*=EQ_CAP/es
     return w
 
 def backtest(panel, weight_fn, band=0.08):

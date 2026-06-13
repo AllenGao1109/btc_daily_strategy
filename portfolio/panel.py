@@ -25,13 +25,14 @@ def btc_signal():
 def asset_signals():
     from assets.harness import load
     d=load(); out_r={}; out_s={}
-    for a in ["spy","qqq","tlt","gld"]:
+    for a in ["spy","qqq","tlt","ief","gld"]:
         c=d[a].dropna(); r=c.pct_change(); out_r[a]=r
         rv=(r.rolling(60).std()*np.sqrt(252)).replace(0,np.nan)
         if a in ("spy","qqq"):       # equities: mild trend-tilt view (Sharpe-neutral but cuts DD)
             s=np.tanh(3*(c/c.rolling(200).mean()-1))
-        elif a=="tlt":               # bonds: vol-managed directional (verified edge)
-            w=(0.13/rv).clip(0,1.5); s=(2*w/1.5-1)
+        elif a in ("tlt","ief"):     # bonds: vol-managed directional (TLT verified edge)
+            tgt=0.13 if a=="tlt" else 0.075
+            w=(tgt/rv).clip(0,1.5); s=(2*w/1.5-1)
         else:                        # gold: vol-managed conviction, mild (no timing edge)
             w=(0.12/rv).clip(0,1.5); s=0.5*(2*w/1.5-1)
         out_s[a]=s.clip(-1,1)
